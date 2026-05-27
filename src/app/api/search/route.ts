@@ -8,12 +8,12 @@ export async function POST(req: NextRequest) {
   const { firmName, firmId } = await req.json();
   if (!firmName) return NextResponse.json({ error: "firmName required" }, { status: 400 });
 
-  // Search for product managers at the firm on LinkedIn
-  // Keep queries simple — Serper 400s on too many quoted OR phrases
+  // Simple queries — no OR operators, Serper 400s on complex boolean syntax
   const queries = [
     `"${firmName}" "product manager" site:linkedin.com/in`,
-    `"${firmName}" "head of product" OR "VP product" OR "director of product" site:linkedin.com/in`,
-    `"${firmName}" "senior product manager" OR "chief product officer" OR "product lead" site:linkedin.com/in`,
+    `"${firmName}" "head of product" site:linkedin.com/in`,
+    `"${firmName}" "VP product" site:linkedin.com/in`,
+    `"${firmName}" "senior product manager" site:linkedin.com/in`,
   ];
 
   const existingCandidates = await getCandidates();
@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
   for (const query of queries) {
     let results;
     try {
-      results = await serperSearch(query, 20);
+      results = await serperSearch(query, 10);
     } catch (err) {
       debug.push({ query, raw: 0, parsed: 0, sample: [`ERROR: ${err instanceof Error ? err.message : String(err)}`] });
       continue;
