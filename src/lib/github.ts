@@ -44,6 +44,41 @@ export async function searchGitHubUser(name: string): Promise<string | null> {
   }
 }
 
+export async function findGitHubUsername(fullName: string): Promise<string | null> {
+  // First try the display-name search
+  const byName = await searchGitHubUser(fullName);
+  if (byName) return byName;
+
+  // Generate common username patterns from first/last name
+  const parts = fullName.trim().toLowerCase().replace(/[^a-z\s]/g, "").split(/\s+/);
+  if (parts.length < 2) return null;
+  const first = parts[0];
+  const last = parts.slice(1).join("");
+
+  const variants = [
+    `${first}${last}`,
+    `${first}-${last}`,
+    `${first}_${last}`,
+    `${first}${last.slice(0, 5)}`,
+    `${first}${last.slice(0, 4)}`,
+    `${first}${last.slice(0, 3)}`,
+    `${first[0]}${last}`,
+    `${first[0]}-${last}`,
+  ].filter((v, i, arr) => arr.indexOf(v) === i && v.length >= 5);
+
+  const octokit = getOctokit();
+  for (const variant of variants) {
+    try {
+      await octokit.users.getByUsername({ username: variant });
+      return variant;
+    } catch {
+      // Not found, try next variant
+    }
+  }
+
+  return null;
+}
+
 export async function getGitHubStats(username: string): Promise<GitHubStats | null> {
   const octokit = getOctokit();
 

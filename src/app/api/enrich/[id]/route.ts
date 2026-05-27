@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCandidate, upsertCandidate } from "@/lib/data";
 import { serperSearch } from "@/lib/serper";
-import { searchGitHubUser, getGitHubStats, extractGitHubUsername } from "@/lib/github";
+import { findGitHubUsername, getGitHubStats, extractGitHubUsername } from "@/lib/github";
 import { calculateVibeScore, extractSignalsFromSearchResults, extractEvidenceFromSearchResults } from "@/lib/scoring";
 import { generateVibeAssessment } from "@/lib/anthropic";
 
@@ -19,6 +19,7 @@ export async function POST(
     // 1. Search across all relevant platforms
     const searchQueries = [
       `"${candidate.name}" github`,
+      `"${candidate.name}" site:github.com`,
       `"${candidate.name}" vibe coding OR cursor OR "built with AI" OR "claude" OR "copilot"`,
       `"${candidate.name}" product manager portfolio`,
       `"${candidate.name}" site:linkedin.com`,
@@ -49,7 +50,7 @@ export async function POST(
     }
 
     if (!githubUsername) {
-      githubUsername = await searchGitHubUser(candidate.name);
+      githubUsername = await findGitHubUsername(candidate.name);
     }
 
     // 3. Get GitHub stats (with AI repo topics and deployed apps)
