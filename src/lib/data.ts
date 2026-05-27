@@ -2,9 +2,14 @@ import fs from "fs/promises";
 import path from "path";
 import { Firm, Candidate } from "./types";
 
-const DATA_DIR = path.join(process.cwd(), "data");
+// /tmp is writable on Vercel; fall back to local data/ in dev
+const DATA_DIR = process.env.VERCEL
+  ? "/tmp/vibe-pm-data"
+  : path.join(process.cwd(), "data");
 const FIRMS_FILE = path.join(DATA_DIR, "firms.json");
 const CANDIDATES_FILE = path.join(DATA_DIR, "candidates.json");
+
+const SEED_FIRMS_FILE = path.join(process.cwd(), "data", "firms.json");
 
 async function ensureFile(filePath: string, defaultContent: string) {
   try {
@@ -16,7 +21,18 @@ async function ensureFile(filePath: string, defaultContent: string) {
 }
 
 export async function getFirms(): Promise<Firm[]> {
-  await ensureFile(FIRMS_FILE, "[]");
+  // On first run in Vercel /tmp, seed from the bundled data/firms.json
+  try {
+    await fs.access(FIRMS_FILE);
+  } catch {
+    await fs.mkdir(DATA_DIR, { recursive: true });
+    try {
+      const seed = await fs.readFile(SEED_FIRMS_FILE, "utf-8");
+      await fs.writeFile(FIRMS_FILE, seed, "utf-8");
+    } catch {
+      await fs.writeFile(FIRMS_FILE, "[]", "utf-8");
+    }
+  }
   const raw = await fs.readFile(FIRMS_FILE, "utf-8");
   return JSON.parse(raw);
 }
