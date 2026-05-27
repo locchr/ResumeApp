@@ -8,18 +8,21 @@ export async function generateVibeAssessment(
   candidate: Pick<Candidate, "name" | "title" | "firm">,
   githubStats: GitHubStats | null,
   signals: string[],
-  vibeScore: number
+  vibeScore: number,
+  platformSummary?: string
 ): Promise<string> {
-  const context = [
+  const contextParts = [
     `Name: ${candidate.name}`,
     `Title: ${candidate.title}`,
     `Firm: ${candidate.firm}`,
     `Vibe Coding Score: ${vibeScore}/100`,
     githubStats
-      ? `GitHub: ${githubStats.publicRepos} repos, ${githubStats.recentCommits} recent commits, languages: ${githubStats.topLanguages.join(", ")}`
+      ? `GitHub: ${githubStats.publicRepos} repos, ${githubStats.recentCommits} recent commits, languages: ${githubStats.topLanguages.join(", ")}${githubStats.aiTopicRepos > 0 ? `, ${githubStats.aiTopicRepos} AI-focused repos` : ""}${githubStats.deployedApps > 0 ? `, ${githubStats.deployedApps} deployed apps` : ""}`
       : "No GitHub profile found",
     signals.length > 0 ? `Signals: ${signals.join("; ")}` : "No vibe coding signals found",
-  ].join("\n");
+  ];
+  if (platformSummary) contextParts.push(`Platform presence: ${platformSummary}`);
+  const context = contextParts.join("\n");
 
   const message = await client.messages.create({
     model: "claude-haiku-4-5-20251001",

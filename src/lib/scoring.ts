@@ -25,6 +25,8 @@ const VIBE_CODING_PHRASES = [
   "prompt engineer",
   "ai native",
   "llm app",
+  "ai-first",
+  "building with llm",
 ];
 
 export function scoreGitHubActivity(stats: GitHubStats | null | undefined): number {
@@ -37,12 +39,16 @@ export function scoreGitHubActivity(stats: GitHubStats | null | undefined): numb
   // Recent commits in last 6 months: +10
   if (stats.hasRecentActivity) score += 10;
 
-  // 5+ public repos: +10
-  if (stats.publicRepos >= 5) score += 10;
+  // 5+ public repos: +5
+  if (stats.publicRepos >= 5) score += 5;
 
-  // AI-adjacent languages (Python, JS/TS): +10
+  // AI-adjacent languages (Python, JS/TS): +5
   const aiLanguages = ["Python", "TypeScript", "JavaScript", "Jupyter Notebook"];
-  if (stats.topLanguages.some((l) => aiLanguages.includes(l))) score += 10;
+  if (stats.topLanguages.some((l) => aiLanguages.includes(l))) score += 5;
+
+  // AI-adjacent repos (topics or name/description): strong builder signal
+  if (stats.aiTopicRepos >= 3) score += 10;
+  else if (stats.aiTopicRepos >= 1) score += 5;
 
   return Math.min(score, 40);
 }
@@ -62,19 +68,23 @@ export function scoreAIToolMentions(signals: string[]): number {
   return Math.min(score, 40);
 }
 
-export function scoreProjectsBuilt(signals: string[]): number {
+export function scoreProjectsBuilt(
+  signals: string[],
+  githubStats?: GitHubStats | null
+): number {
   const combined = signals.join(" ").toLowerCase();
   let score = 0;
 
-  if (
+  const hasPortfolio =
     combined.includes("portfolio") ||
     combined.includes("personal site") ||
     combined.includes("built") ||
     combined.includes("side project") ||
-    combined.includes("launched")
-  ) {
-    score += 10;
-  }
+    combined.includes("launched") ||
+    (githubStats?.deployedApps ?? 0) > 0 ||
+    !!githubStats?.personalWebsite;
+
+  if (hasPortfolio) score += 10;
 
   if (combined.includes("product hunt")) score += 10;
 
@@ -87,7 +97,7 @@ export function calculateVibeScore(
 ): { vibeScore: number; scoreBreakdown: ScoreBreakdown } {
   const githubActivity = scoreGitHubActivity(githubStats);
   const aiToolMentions = scoreAIToolMentions(signals);
-  const projectsBuilt = scoreProjectsBuilt(signals);
+  const projectsBuilt = scoreProjectsBuilt(signals, githubStats);
 
   const vibeScore = githubActivity + aiToolMentions + projectsBuilt;
 
@@ -111,7 +121,6 @@ export function extractEvidenceFromSearchResults(
     }
   };
 
-  // GitHub profile always goes first
   if (githubUrl) {
     add({ text: "GitHub profile", url: githubUrl, title: "GitHub profile", category: "github" });
   }
@@ -119,13 +128,26 @@ export function extractEvidenceFromSearchResults(
   for (const r of results) {
     const combined = `${r.title} ${r.snippet}`.toLowerCase();
 
-    // GitHub results
     if (r.link.includes("github.com") && !r.link.includes("github.com/sponsors")) {
       add({ text: "GitHub activity", url: r.link, title: r.title, category: "github" });
       continue;
     }
 
-    // AI tools
+    if (r.link.includes("medium.com")) {
+      add({ text: "Medium article", url: r.link, title: r.title, category: "ai_tools" });
+      continue;
+    }
+
+    if (r.link.includes("reddit.com")) {
+      add({ text: "Reddit discussion", url: r.link, title: r.title, category: "ai_tools" });
+      continue;
+    }
+
+    if (r.link.includes("producthunt.com")) {
+      add({ text: "Product Hunt", url: r.link, title: r.title, category: "projects" });
+      continue;
+    }
+
     for (const tool of AI_TOOLS) {
       if (combined.includes(tool)) {
         add({ text: `Mentions ${tool.charAt(0).toUpperCase() + tool.slice(1)}`, url: r.link, title: r.title, category: "ai_tools" });
@@ -133,7 +155,6 @@ export function extractEvidenceFromSearchResults(
       }
     }
 
-    // Vibe coding phrases
     for (const phrase of VIBE_CODING_PHRASES) {
       if (combined.includes(phrase)) {
         add({ text: `"${phrase}" reference`, url: r.link, title: r.title, category: "ai_tools" });
@@ -141,13 +162,10 @@ export function extractEvidenceFromSearchResults(
       }
     }
 
-    // Projects / portfolio
     if (
       combined.includes("portfolio") ||
-      combined.includes("product hunt") ||
       combined.includes("side project") ||
-      combined.includes("launched") ||
-      r.link.includes("producthunt.com")
+      combined.includes("launched")
     ) {
       add({ text: "Project or portfolio", url: r.link, title: r.title, category: "projects" });
     }
@@ -177,6 +195,19 @@ export function extractSignalsFromSearchResults(
   if (combined.includes("github.com")) signals.push("Has GitHub presence");
   if (combined.includes("product hunt")) signals.push("Active on Product Hunt");
   if (combined.includes("twitter") || combined.includes("x.com")) signals.push("Active on Twitter/X");
+
+  const linkedinResults = results.filter((r) => r.link.includes("linkedin.com"));
+  if (linkedinResults.some((r) => `${r.title} ${r.snippet}`.toLowerCase().match(/ai|cursor|claude|copilot|llm|vibe/))) {
+    signals.push("Active on LinkedIn about AI");
+  }
+
+  if (results.some((r) => r.link.includes("medium.com"))) {
+    signals.push("Medium author on AI");
+  }
+
+  if (results.some((r) => r.link.includes("reddit.com") && `${r.title} ${r.snippet}`.toLowerCase().match(/ai|cursor|claude|llm|vibe/))) {
+    signals.push("Reddit AI contributor");
+  }
 
   return [...new Set(signals)];
 }

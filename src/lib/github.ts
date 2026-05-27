@@ -6,6 +6,13 @@ function getOctokit() {
   });
 }
 
+const AI_REPO_KEYWORDS = [
+  "openai", "anthropic", "claude", "llm", "langchain", "langchain",
+  "chatgpt", "generative-ai", "cursor", "copilot", "huggingface",
+  "transformers", "gpt", "ai-agent", "ai-assistant", "rag",
+  "embedding", "vector-db", "prompt",
+];
+
 export interface GitHubStats {
   publicRepos: number;
   followers: number;
@@ -15,6 +22,11 @@ export interface GitHubStats {
   profileUrl: string;
   avatarUrl?: string;
   bio?: string;
+  aiTopicRepos: number;
+  deployedApps: number;
+  personalWebsite?: string;
+  totalStars: number;
+  aiRepoNames: string[];
 }
 
 export async function searchGitHubUser(name: string): Promise<string | null> {
@@ -26,7 +38,6 @@ export async function searchGitHubUser(name: string): Promise<string | null> {
     });
 
     if (data.items.length === 0) return null;
-    // Return the first result with a reasonable match
     return data.items[0].login;
   } catch {
     return null;
@@ -39,19 +50,35 @@ export async function getGitHubStats(username: string): Promise<GitHubStats | nu
   try {
     const { data: user } = await octokit.users.getByUsername({ username });
 
-    // Get repos to find top languages
     const { data: repos } = await octokit.repos.listForUser({
       username,
       sort: "updated",
-      per_page: 30,
+      per_page: 50,
       type: "owner",
     });
 
-    // Count languages
     const languageCount: Record<string, number> = {};
+    let aiTopicRepos = 0;
+    let deployedApps = 0;
+    let totalStars = 0;
+    const aiRepoNames: string[] = [];
+
     for (const repo of repos) {
       if (repo.language) {
         languageCount[repo.language] = (languageCount[repo.language] ?? 0) + 1;
+      }
+      totalStars += repo.stargazers_count ?? 0;
+      if (repo.homepage) deployedApps++;
+
+      // Check repo topics, name, and description for AI signals
+      const topics: string[] = (repo as { topics?: string[] }).topics ?? [];
+      const nameAndDesc = `${repo.name} ${repo.description ?? ""}`.toLowerCase();
+      const hasAiTopic = topics.some((t) => AI_REPO_KEYWORDS.includes(t.toLowerCase()));
+      const hasAiName = AI_REPO_KEYWORDS.some((k) => nameAndDesc.includes(k));
+
+      if (hasAiTopic || hasAiName) {
+        aiTopicRepos++;
+        aiRepoNames.push(repo.name);
       }
     }
 
@@ -60,7 +87,6 @@ export async function getGitHubStats(username: string): Promise<GitHubStats | nu
       .slice(0, 5)
       .map(([lang]) => lang);
 
-    // Check recent activity (last 6 months)
     const sixMonthsAgo = new Date();
     sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
@@ -68,7 +94,6 @@ export async function getGitHubStats(username: string): Promise<GitHubStats | nu
       (r) => r.pushed_at && new Date(r.pushed_at) > sixMonthsAgo
     );
 
-    // Estimate recent commits from events
     let recentCommits = 0;
     try {
       const { data: events } = await octokit.activity.listPublicEventsForUser({
@@ -93,6 +118,11 @@ export async function getGitHubStats(username: string): Promise<GitHubStats | nu
       profileUrl: user.html_url,
       avatarUrl: user.avatar_url,
       bio: user.bio ?? undefined,
+      aiTopicRepos,
+      deployedApps,
+      personalWebsite: user.blog || undefined,
+      totalStars,
+      aiRepoNames: aiRepoNames.slice(0, 10),
     };
   } catch {
     return null;
