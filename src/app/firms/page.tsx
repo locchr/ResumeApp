@@ -1,15 +1,18 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Firm, Candidate } from "@/lib/types";
+import { Firm, Candidate, FirmSector, SECTOR_LABELS } from "@/lib/types";
 import { FirmCard } from "@/components/FirmCard";
 import { Button } from "@/components/ui/button";
 import { Plus, Building2 } from "lucide-react";
+
+const selectCls = "bg-slate-900 border border-slate-600 rounded-md px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500";
 
 export default function FirmsPage() {
   const [firms, setFirms] = useState<Firm[]>([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [newFirmName, setNewFirmName] = useState("");
+  const [newFirmSector, setNewFirmSector] = useState<FirmSector | "">("");
   const [adding, setAdding] = useState(false);
   const [showForm, setShowForm] = useState(false);
 
@@ -31,9 +34,14 @@ export default function FirmsPage() {
     await fetch("/api/firms", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: newFirmName.trim(), aliases: [] }),
+      body: JSON.stringify({
+        name: newFirmName.trim(),
+        aliases: [],
+        sector: newFirmSector || undefined,
+      }),
     });
     setNewFirmName("");
+    setNewFirmSector("");
     setShowForm(false);
     setAdding(false);
     load();
@@ -61,15 +69,25 @@ export default function FirmsPage() {
       </div>
 
       {showForm && (
-        <form onSubmit={handleAdd} className="bg-slate-800 border border-slate-700 rounded-lg p-4 flex gap-3">
+        <form onSubmit={handleAdd} className="bg-slate-800 border border-slate-700 rounded-lg p-4 flex flex-wrap gap-3">
           <input
             type="text"
             value={newFirmName}
             onChange={(e) => setNewFirmName(e.target.value)}
             placeholder="Firm name (e.g. Andreessen Horowitz)"
-            className="flex-1 bg-slate-900 border border-slate-600 rounded-md px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className={`flex-1 min-w-[200px] ${selectCls}`}
             autoFocus
           />
+          <select
+            value={newFirmSector}
+            onChange={(e) => setNewFirmSector(e.target.value as FirmSector | "")}
+            className={selectCls}
+          >
+            <option value="">No sector</option>
+            {(Object.entries(SECTOR_LABELS) as [FirmSector, string][]).map(([val, label]) => (
+              <option key={val} value={val}>{label}</option>
+            ))}
+          </select>
           <Button type="submit" disabled={adding || !newFirmName.trim()}>
             {adding ? "Adding..." : "Add"}
           </Button>

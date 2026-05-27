@@ -1,7 +1,19 @@
+export type FirmSector = "investment_bank" | "retail_bank" | "asset_manager" | "alternatives" | "hedge_fund" | "other";
+
+export const SECTOR_LABELS: Record<FirmSector, string> = {
+  investment_bank: "Investment Bank",
+  retail_bank: "Retail Bank",
+  asset_manager: "Asset Manager",
+  alternatives: "Alternatives",
+  hedge_fund: "Hedge Fund",
+  other: "Other",
+};
+
 export interface Firm {
   id: string;
   name: string;
   aliases: string[];
+  sector?: FirmSector;
 }
 
 export interface ScoreBreakdown {

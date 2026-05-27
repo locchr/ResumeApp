@@ -1,4 +1,7 @@
-import { getFirms, getCandidates } from "@/lib/data";
+"use client";
+
+import { useState, useEffect, useCallback } from "react";
+import { Firm, Candidate, FirmSector, SECTOR_LABELS } from "@/lib/types";
 import { FirmCard } from "@/components/FirmCard";
 import { CandidateCard } from "@/components/CandidateCard";
 import { vibeScoreLabel } from "@/lib/utils";
@@ -6,12 +9,34 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Trophy, Zap } from "lucide-react";
 
-export const dynamic = "force-dynamic";
+const SECTORS = Object.entries(SECTOR_LABELS) as [FirmSector, string][];
 
-export default async function DashboardPage() {
-  const [firms, allCandidates] = await Promise.all([getFirms(), getCandidates()]);
+export default function DashboardPage() {
+  const [firms, setFirms] = useState<Firm[]>([]);
+  const [allCandidates, setAllCandidates] = useState<Candidate[]>([]);
+  const [sectorFilter, setSectorFilter] = useState<FirmSector | "">("");
 
-  const enriched = allCandidates.filter((c) => c.status === "enriched");
+  const load = useCallback(async () => {
+    const [f, c] = await Promise.all([
+      fetch("/api/firms").then((r) => r.json()),
+      fetch("/api/candidates").then((r) => r.json()),
+    ]);
+    setFirms(f);
+    setAllCandidates(c);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const visibleFirms = sectorFilter
+    ? firms.filter((f) => f.sector === sectorFilter)
+    : firms;
+
+  const visibleFirmNames = new Set(visibleFirms.map((f) => f.name));
+
+  const enriched = allCandidates.filter(
+    (c) => c.status === "enriched" && (!sectorFilter || visibleFirmNames.has(c.firm))
+  );
+
   const avgScore =
     enriched.length > 0
       ? Math.round(enriched.reduce((s, c) => s + c.vibeScore, 0) / enriched.length)
@@ -21,6 +46,8 @@ export default async function DashboardPage() {
 
   const candidatesByFirm = (firmName: string) =>
     allCandidates.filter((c) => c.firm === firmName);
+
+  const hasSectors = firms.some((f) => f.sector);
 
   return (
     <div className="space-y-8">
@@ -38,11 +65,42 @@ export default async function DashboardPage() {
         </Link>
       </div>
 
+      {/* Sector filter pills — only shown once at least one firm has a sector */}
+      {hasSectors && (
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => setSectorFilter("")}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors border ${
+              sectorFilter === ""
+                ? "bg-indigo-600 border-indigo-500 text-white"
+                : "border-slate-600 text-slate-400 hover:border-slate-400 hover:text-slate-200"
+            }`}
+          >
+            All
+          </button>
+          {SECTORS.map(([val, label]) =>
+            firms.some((f) => f.sector === val) ? (
+              <button
+                key={val}
+                onClick={() => setSectorFilter(sectorFilter === val ? "" : val)}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors border ${
+                  sectorFilter === val
+                    ? "bg-indigo-600 border-indigo-500 text-white"
+                    : "border-slate-600 text-slate-400 hover:border-slate-400 hover:text-slate-200"
+                }`}
+              >
+                {label}
+              </button>
+            ) : null
+          )}
+        </div>
+      )}
+
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
-          { label: "Firms", value: firms.length },
-          { label: "Candidates", value: allCandidates.length },
+          { label: "Firms", value: visibleFirms.length },
+          { label: "Candidates", value: sectorFilter ? enriched.length + allCandidates.filter(c => c.status !== "enriched" && visibleFirmNames.has(c.firm)).length : allCandidates.length },
           { label: "Enriched", value: enriched.length },
           { label: "Avg Vibe Score", value: avgScore || "—" },
         ].map(({ label, value }) => (
@@ -56,11 +114,14 @@ export default async function DashboardPage() {
       {/* Firms grid */}
       <div>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-slate-200">Target Firms</h2>
+          <h2 className="text-lg font-semibold text-slate-200">
+            Target Firms
+            {sectorFilter && <span className="text-slate-400 font-normal text-sm ml-2">· {SECTOR_LABELS[sectorFilter]}</span>}
+          </h2>
           <Link href="/firms" className="text-sm text-indigo-400 hover:text-indigo-300">Manage →</Link>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {firms.map((firm) => (
+          {visibleFirms.map((firm) => (
             <FirmCard key={firm.id} firm={firm} candidates={candidatesByFirm(firm.name)} />
           ))}
         </div>
@@ -71,12 +132,20 @@ export default async function DashboardPage() {
         <div>
           <div className="flex items-center gap-2 mb-4">
             <Trophy className="w-5 h-5 text-amber-400" />
-            <h2 className="text-lg font-semibold text-slate-200">Top Vibe Coders</h2>
+            <h2 className="text-lg font-semibold text-slate-200">
+              Top Vibe Coders
+              {sectorFilter && <span className="text-slate-400 font-normal text-sm ml-2">· {SECTOR_LABELS[sectorFilter]}</span>}
+            </h2>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {topCoders.map((c) => (
               <CandidateCard key={c.id} candidate={c} />
             ))}
+          </div>
+          <div className="mt-4 text-center">
+            <Link href="/candidates" className="text-sm text-indigo-400 hover:text-indigo-300">
+              View all candidates →
+            </Link>
           </div>
         </div>
       )}

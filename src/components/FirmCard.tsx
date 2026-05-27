@@ -1,9 +1,9 @@
 "use client";
 
-import { Firm, Candidate } from "@/lib/types";
+import { Firm, Candidate, SECTOR_LABELS } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Building2, Search, Trash2, Users } from "lucide-react";
+import { Building2, Search, Trash2, Users, List } from "lucide-react";
 import Link from "next/link";
 
 interface Props {
@@ -37,6 +37,9 @@ export function FirmCard({ firm, candidates, onDelete }: Props) {
                 {avgScore !== null && (
                   <span className="text-amber-400 font-medium">avg {avgScore}/100</span>
                 )}
+                {firm.sector && (
+                  <span className="text-indigo-400">{SECTOR_LABELS[firm.sector]}</span>
+                )}
               </div>
             </div>
           </div>
@@ -59,7 +62,7 @@ export function FirmCard({ firm, candidates, onDelete }: Props) {
 
         {candidates.length > 0 && (
           <div className="mt-4 pt-3 border-t border-slate-700">
-            <div className="grid grid-cols-3 gap-2 text-center">
+            <div className="grid grid-cols-3 gap-2 text-center mb-3">
               <div>
                 <p className="text-lg font-bold text-slate-100">{candidates.length}</p>
                 <p className="text-xs text-slate-500">Found</p>
@@ -73,6 +76,11 @@ export function FirmCard({ firm, candidates, onDelete }: Props) {
                 <p className="text-xs text-slate-500">Avg Score</p>
               </div>
             </div>
+            <Link href={`/firms/${firm.id}`}
+              className="flex items-center justify-center gap-1.5 text-xs text-slate-400 hover:text-indigo-300 transition-colors">
+              <List className="w-3 h-3" />
+              View all PMs
+            </Link>
           </div>
         )}
       </CardContent>
