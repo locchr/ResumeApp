@@ -16,7 +16,7 @@ export async function POST(
   }
 
   try {
-    // 1. Search across all relevant platforms
+    // 1. Search across all relevant platforms — run in parallel to stay within timeout
     const searchQueries = [
       `"${candidate.name}" github`,
       `"${candidate.name}" site:github.com`,
@@ -28,15 +28,12 @@ export async function POST(
       `"${candidate.name}" site:producthunt.com`,
     ];
 
-    let allResults: Array<{ title: string; snippet: string; link: string }> = [];
-    for (const q of searchQueries) {
-      try {
-        const results = await serperSearch(q, 5);
-        allResults = allResults.concat(results);
-      } catch {
-        // Continue with partial results
-      }
-    }
+    const settled = await Promise.allSettled(
+      searchQueries.map((q) => serperSearch(q, 5))
+    );
+    const allResults: Array<{ title: string; snippet: string; link: string }> = settled
+      .flatMap((r) => r.status === "fulfilled" ? r.value : [])
+      .map(({ title, snippet, link }) => ({ title, snippet, link }));
 
     // 2. Find GitHub username
     let githubUsername: string | null = null;
