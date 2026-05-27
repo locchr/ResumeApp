@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCandidate, upsertCandidate } from "@/lib/data";
 import { serperSearch } from "@/lib/serper";
 import { searchGitHubUser, getGitHubStats, extractGitHubUsername } from "@/lib/github";
-import { calculateVibeScore, extractSignalsFromSearchResults } from "@/lib/scoring";
+import { calculateVibeScore, extractSignalsFromSearchResults, extractEvidenceFromSearchResults } from "@/lib/scoring";
 import { generateVibeAssessment } from "@/lib/anthropic";
 
 export async function POST(
@@ -53,9 +53,10 @@ export async function POST(
     // 3. Get GitHub stats
     const githubStats = githubUsername ? await getGitHubStats(githubUsername) : null;
 
-    // 4. Extract signals from web results
+    // 4. Extract signals and evidence from web results
     const webSignals = extractSignalsFromSearchResults(allResults);
     if (githubStats) webSignals.push(`GitHub: ${githubStats.publicRepos} public repos`);
+    const evidence = extractEvidenceFromSearchResults(allResults, githubStats?.profileUrl);
 
     // 5. Calculate score
     const { vibeScore, scoreBreakdown } = calculateVibeScore(githubStats, webSignals);
@@ -85,6 +86,7 @@ export async function POST(
       vibeScore,
       scoreBreakdown,
       signals: webSignals,
+      evidence,
       assessment,
       enrichedAt: new Date().toISOString(),
       status: "enriched" as const,

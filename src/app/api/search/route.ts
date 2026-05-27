@@ -10,8 +10,9 @@ export async function POST(req: NextRequest) {
 
   // Search for product managers at the firm on LinkedIn
   const queries = [
-    `"${firmName}" "product manager" site:linkedin.com/in`,
-    `"${firmName}" "VP product" OR "head of product" OR "director of product" site:linkedin.com/in`,
+    `"${firmName}" "product manager" OR "group product manager" OR "principal product manager" site:linkedin.com/in`,
+    `"${firmName}" "VP of product" OR "head of product" OR "director of product" OR "chief product officer" site:linkedin.com/in`,
+    `"${firmName}" "CPO" OR "product lead" OR "senior product manager" site:linkedin.com/in`,
   ];
 
   const existingCandidates = await getCandidates();
@@ -22,7 +23,7 @@ export async function POST(req: NextRequest) {
   for (const query of queries) {
     let results;
     try {
-      results = await serperSearch(query, 10);
+      results = await serperSearch(query, 20);
     } catch (err) {
       return NextResponse.json(
         { error: err instanceof Error ? err.message : "Search failed" },
@@ -45,6 +46,7 @@ export async function POST(req: NextRequest) {
         vibeScore: 0,
         scoreBreakdown: { githubActivity: 0, aiToolMentions: 0, projectsBuilt: 0 },
         signals: [],
+        evidence: [],
         assessment: "",
         status: "pending",
       };

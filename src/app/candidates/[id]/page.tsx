@@ -100,7 +100,11 @@ export default async function CandidateProfilePage({
       {isEnriched && (
         <div className="bg-slate-800 border border-slate-700 rounded-xl p-6 space-y-4">
           <h2 className="font-semibold text-slate-200">Vibe Score Breakdown</h2>
-          <ScoreBreakdown breakdown={candidate.scoreBreakdown} />
+          <ScoreBreakdown
+            breakdown={candidate.scoreBreakdown}
+            evidence={candidate.evidence ?? []}
+            githubUrl={candidate.githubUrl}
+          />
           <div className="grid grid-cols-3 gap-3 pt-2">
             {[
               { label: "GitHub", value: candidate.scoreBreakdown.githubActivity, max: 40 },
@@ -161,16 +165,34 @@ export default async function CandidateProfilePage({
         </div>
       )}
 
-      {/* Signals */}
-      {candidate.signals.length > 0 && (
+      {/* Evidence sources */}
+      {(candidate.evidence ?? []).length > 0 && (
         <div className="bg-slate-800 border border-slate-700 rounded-xl p-6 space-y-3">
           <h2 className="font-semibold text-slate-200 flex items-center gap-2">
             <Star className="w-4 h-4 text-amber-400" />
-            Detected Signals
+            All Sources
           </h2>
-          <div className="flex flex-wrap gap-2">
-            {candidate.signals.map((s, i) => (
-              <Badge key={i} variant="indigo">{s}</Badge>
+          <div className="space-y-2">
+            {(candidate.evidence ?? []).map((e, i) => (
+              <a
+                key={i}
+                href={e.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-start gap-2 p-2 rounded-lg hover:bg-slate-700 transition-colors group"
+              >
+                <span className={`mt-0.5 flex-shrink-0 w-2 h-2 rounded-full ${
+                  e.category === "github" ? "bg-blue-400" :
+                  e.category === "ai_tools" ? "bg-purple-400" : "bg-emerald-400"
+                }`} />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm text-slate-200 group-hover:text-indigo-300 truncate transition-colors">{e.title}</p>
+                  <p className="text-xs text-slate-500 truncate">{e.url}</p>
+                </div>
+                <Badge variant={e.category === "github" ? "indigo" : e.category === "ai_tools" ? "default" : "success"} className="flex-shrink-0 text-xs">
+                  {e.category === "github" ? "GitHub" : e.category === "ai_tools" ? "AI Signal" : "Project"}
+                </Badge>
+              </a>
             ))}
           </div>
         </div>

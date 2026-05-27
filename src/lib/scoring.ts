@@ -1,5 +1,5 @@
 import { GitHubStats } from "./github";
-import { ScoreBreakdown } from "./types";
+import { Evidence, ScoreBreakdown } from "./types";
 
 const AI_TOOLS = [
   "cursor",
@@ -95,6 +95,65 @@ export function calculateVibeScore(
     vibeScore: Math.min(vibeScore, 100),
     scoreBreakdown: { githubActivity, aiToolMentions, projectsBuilt },
   };
+}
+
+export function extractEvidenceFromSearchResults(
+  results: Array<{ title: string; snippet: string; link: string }>,
+  githubUrl?: string
+): Evidence[] {
+  const evidence: Evidence[] = [];
+  const seen = new Set<string>();
+
+  const add = (item: Evidence) => {
+    if (!seen.has(item.url)) {
+      seen.add(item.url);
+      evidence.push(item);
+    }
+  };
+
+  // GitHub profile always goes first
+  if (githubUrl) {
+    add({ text: "GitHub profile", url: githubUrl, title: "GitHub profile", category: "github" });
+  }
+
+  for (const r of results) {
+    const combined = `${r.title} ${r.snippet}`.toLowerCase();
+
+    // GitHub results
+    if (r.link.includes("github.com") && !r.link.includes("github.com/sponsors")) {
+      add({ text: "GitHub activity", url: r.link, title: r.title, category: "github" });
+      continue;
+    }
+
+    // AI tools
+    for (const tool of AI_TOOLS) {
+      if (combined.includes(tool)) {
+        add({ text: `Mentions ${tool.charAt(0).toUpperCase() + tool.slice(1)}`, url: r.link, title: r.title, category: "ai_tools" });
+        break;
+      }
+    }
+
+    // Vibe coding phrases
+    for (const phrase of VIBE_CODING_PHRASES) {
+      if (combined.includes(phrase)) {
+        add({ text: `"${phrase}" reference`, url: r.link, title: r.title, category: "ai_tools" });
+        break;
+      }
+    }
+
+    // Projects / portfolio
+    if (
+      combined.includes("portfolio") ||
+      combined.includes("product hunt") ||
+      combined.includes("side project") ||
+      combined.includes("launched") ||
+      r.link.includes("producthunt.com")
+    ) {
+      add({ text: "Project or portfolio", url: r.link, title: r.title, category: "projects" });
+    }
+  }
+
+  return evidence.slice(0, 12);
 }
 
 export function extractSignalsFromSearchResults(

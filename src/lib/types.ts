@@ -10,6 +10,13 @@ export interface ScoreBreakdown {
   projectsBuilt: number;    // 0-20
 }
 
+export interface Evidence {
+  text: string;
+  url: string;
+  title: string;
+  category: "github" | "ai_tools" | "projects";
+}
+
 export interface Candidate {
   id: string;
   name: string;
@@ -23,6 +30,7 @@ export interface Candidate {
   vibeScore: number;
   scoreBreakdown: ScoreBreakdown;
   signals: string[];
+  evidence: Evidence[];
   assessment: string;
   githubStats?: {
     publicRepos: number;
