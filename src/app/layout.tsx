@@ -1,0 +1,25 @@
+import type { Metadata } from "next";
+import { Geist, Geist_Mono } from "next/font/google";
+import "./globals.css";
+import { NavBar } from "@/components/NavBar";
+
+const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
+const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
+
+export const metadata: Metadata = {
+  title: "VibePM — Vibe Coder Recruiter",
+  description: "Find and score AI-forward product managers at top financial firms",
+};
+
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  return (
+    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
+      <body className="bg-slate-900 text-slate-100 min-h-screen">
+        <NavBar />
+        <main className="max-w-7xl mx-auto px-4 py-8">
+          {children}
+        </main>
+      </body>
+    </html>
+  );
+}

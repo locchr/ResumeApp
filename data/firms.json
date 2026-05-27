@@ -1,0 +1,12 @@
+[
+  { "id": "apollo", "name": "Apollo Global Management", "aliases": ["Apollo Global", "Apollo"] },
+  { "id": "blackstone", "name": "Blackstone", "aliases": ["Blackstone Group"] },
+  { "id": "blackrock", "name": "BlackRock", "aliases": ["Black Rock"] },
+  { "id": "kkr", "name": "KKR", "aliases": ["Kohlberg Kravis Roberts"] },
+  { "id": "carlyle", "name": "Carlyle Group", "aliases": ["Carlyle"] },
+  { "id": "citadel", "name": "Citadel", "aliases": ["Citadel LLC", "Citadel Securities"] },
+  { "id": "twosigma", "name": "Two Sigma", "aliases": ["Two Sigma Investments"] },
+  { "id": "bridgewater", "name": "Bridgewater Associates", "aliases": ["Bridgewater"] },
+  { "id": "goldman", "name": "Goldman Sachs", "aliases": ["Goldman", "GS"] },
+  { "id": "jpmorgan", "name": "JPMorgan Chase", "aliases": ["JPMorgan", "JP Morgan", "JPMC"] }
+]
