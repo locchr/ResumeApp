@@ -20,18 +20,24 @@ export async function POST(req: NextRequest) {
   const existingUrls = new Set(existingCandidates.map((c) => c.linkedinUrl).filter(Boolean));
 
   const newCandidates: Candidate[] = [];
+  const debug: Array<{ query: string; raw: number; parsed: number; sample: string[] }> = [];
 
   for (const query of queries) {
     let results;
     try {
       results = await serperSearch(query, 20);
-    } catch {
-      continue; // skip this query, keep going with the others
+    } catch (err) {
+      debug.push({ query, raw: 0, parsed: 0, sample: [`ERROR: ${err instanceof Error ? err.message : String(err)}`] });
+      continue;
     }
+
+    let parsedCount = 0;
+    const sample = results.slice(0, 3).map((r) => `${r.link} | ${r.title}`);
 
     for (const result of results) {
       const parsed = parseLinkedInResult(result);
       if (!parsed) continue;
+      parsedCount++;
       if (existingUrls.has(parsed.linkedinUrl)) continue;
       existingUrls.add(parsed.linkedinUrl);
 
@@ -52,11 +58,14 @@ export async function POST(req: NextRequest) {
       await upsertCandidate(candidate);
       newCandidates.push(candidate);
     }
+
+    debug.push({ query, raw: results.length, parsed: parsedCount, sample });
   }
 
   return NextResponse.json({
     found: newCandidates.length,
     candidates: newCandidates,
     firmId,
+    debug,
   });
 }
