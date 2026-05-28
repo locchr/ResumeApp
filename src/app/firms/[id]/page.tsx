@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import { Firm, Candidate, SECTOR_LABELS } from "@/lib/types";
 import { vibeScoreBg } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Search, Zap, Loader2 } from "lucide-react";
+import { ArrowLeft, Search, Zap, Loader2, SlidersHorizontal } from "lucide-react";
 import Link from "next/link";
 
 export default function FirmDetailPage() {
@@ -16,7 +16,10 @@ export default function FirmDetailPage() {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [discovering, setDiscovering] = useState(false);
   const [enrichingIds, setEnrichingIds] = useState<Set<string>>(new Set());
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // pendingSelectedIds — for "Enrich selected"
+  const [pendingSelectedIds, setPendingSelectedIds] = useState<Set<string>>(new Set());
+  // enrichedSelectedIds — for "Compare"
+  const [enrichedSelectedIds, setEnrichedSelectedIds] = useState<Set<string>>(new Set());
   const [status, setStatus] = useState("");
   const discoverPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -54,12 +57,11 @@ export default function FirmDetailPage() {
       });
       const fresh = await loadCandidates(firm.name);
       const pendingCount = fresh.filter((c) => c.status === "pending").length;
-      if (pendingCount === 0) {
-        setDiscovering(false);
-        setStatus("Search complete");
-        return;
-      }
-      setStatus(`Found ${pendingCount} new candidate${pendingCount !== 1 ? "s" : ""} — click Enrich to score them`);
+      setStatus(
+        pendingCount > 0
+          ? `Found ${pendingCount} new PM${pendingCount !== 1 ? "s" : ""} — click Enrich to score them`
+          : "Search complete — no new PMs found"
+      );
       setDiscovering(false);
     } catch {
       setStatus("Error — try again");
@@ -71,7 +73,6 @@ export default function FirmDetailPage() {
     setEnrichingIds((prev) => new Set(prev).add(candidateId));
     try {
       await fetch(`/api/enrich/${candidateId}`, { method: "POST" });
-      // Poll this candidate until no longer pending
       const poll = setInterval(async () => {
         const c: Candidate[] = await fetch(`/api/candidates?firm=${encodeURIComponent(firmName)}`).then((r) => r.json());
         const updated = c.find((x) => x.id === candidateId);
@@ -88,33 +89,37 @@ export default function FirmDetailPage() {
 
   function handleEnrichSelected() {
     if (!firm) return;
-    const ids = [...selectedIds];
-    setSelectedIds(new Set());
+    const ids = [...pendingSelectedIds];
+    setPendingSelectedIds(new Set());
     ids.forEach((cid) => enrichOne(cid, firm.name));
   }
 
   function handleEnrichAll() {
     if (!firm) return;
     const pendingIds = candidates.filter((c) => c.status === "pending").map((c) => c.id);
-    setSelectedIds(new Set());
+    setPendingSelectedIds(new Set());
     pendingIds.forEach((cid) => enrichOne(cid, firm.name));
   }
 
-  function toggleSelect(cid: string) {
-    setSelectedIds((prev) => {
+  function togglePendingSelect(cid: string) {
+    setPendingSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(cid)) next.delete(cid); else next.add(cid);
       return next;
     });
   }
 
-  function toggleSelectAll(pending: Candidate[]) {
-    const allSelected = pending.every((c) => selectedIds.has(c.id));
-    if (allSelected) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(pending.map((c) => c.id)));
-    }
+  function toggleEnrichedSelect(cid: string) {
+    setEnrichedSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(cid)) next.delete(cid); else next.add(cid);
+      return next;
+    });
+  }
+
+  function toggleSelectAllPending(pending: Candidate[]) {
+    const allSelected = pending.every((c) => pendingSelectedIds.has(c.id));
+    setPendingSelectedIds(allSelected ? new Set() : new Set(pending.map((c) => c.id)));
   }
 
   if (!firm) {
@@ -127,7 +132,8 @@ export default function FirmDetailPage() {
     enriched.length > 0
       ? Math.round(enriched.reduce((s, c) => s + c.vibeScore, 0) / enriched.length)
       : null;
-  const allPendingSelected = pending.length > 0 && pending.every((c) => selectedIds.has(c.id));
+  const allPendingSelected = pending.length > 0 && pending.every((c) => pendingSelectedIds.has(c.id));
+  const compareUrl = `/compare?ids=${[...enrichedSelectedIds].join(",")}`;
 
   return (
     <div className="space-y-6">
@@ -184,65 +190,39 @@ export default function FirmDetailPage() {
         </div>
       ) : (
         <div className="space-y-6">
-          {/* Enriched */}
+          {/* ── Enriched section ── */}
           {enriched.length > 0 && (
-            <div>
-              <h2 className="text-sm font-medium text-slate-300 mb-3">Enriched · sorted by vibe score</h2>
-              <div className="space-y-2">
-                {enriched.map((c, i) => (
-                  <div key={c.id} className="flex items-center gap-3 bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 hover:border-slate-600 transition-colors">
-                    <span className="text-slate-500 text-sm w-5 text-right flex-shrink-0">{i + 1}</span>
-                    <Link href={`/candidates/${c.id}`} className="flex-1 min-w-0">
-                      <p className="font-medium text-slate-100 hover:text-indigo-300 transition-colors truncate">{c.name}</p>
-                      <p className="text-xs text-slate-500 truncate">{c.title}</p>
-                    </Link>
-                    <span className={`flex-shrink-0 px-2.5 py-1 rounded-full border text-xs font-bold ${vibeScoreBg(c.vibeScore)}`}>
-                      <span className="flex items-center gap-1">
-                        <Zap className="w-3 h-3" />
-                        {c.vibeScore}
-                      </span>
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Pending */}
-          {pending.length > 0 && (
             <div>
               <div className="flex items-center justify-between mb-3 gap-3">
                 <div className="flex items-center gap-3">
                   <input
                     type="checkbox"
-                    checked={allPendingSelected}
-                    onChange={() => toggleSelectAll(pending)}
+                    checked={enriched.length > 0 && enriched.every((c) => enrichedSelectedIds.has(c.id))}
+                    onChange={() => {
+                      const allSel = enriched.every((c) => enrichedSelectedIds.has(c.id));
+                      setEnrichedSelectedIds(allSel ? new Set() : new Set(enriched.map((c) => c.id)));
+                    }}
                     className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-slate-900 cursor-pointer"
-                    title="Select all pending"
+                    title="Select all enriched"
                   />
                   <h2 className="text-sm font-medium text-slate-300">
-                    Pending enrichment ({pending.length})
+                    Enriched · sorted by vibe score ({enriched.length})
                   </h2>
                 </div>
-                <div className="flex items-center gap-2">
-                  {selectedIds.size > 0 && (
-                    <Button size="sm" onClick={handleEnrichSelected} className="gap-1.5">
-                      <Zap className="w-3 h-3" />
-                      Enrich selected ({selectedIds.size})
-                    </Button>
-                  )}
-                  <Button size="sm" variant="outline" onClick={handleEnrichAll} className="gap-1.5"
-                    disabled={enrichingIds.size === pending.length}>
-                    <Zap className="w-3 h-3" />
-                    Enrich all
-                  </Button>
-                </div>
+                {enrichedSelectedIds.size >= 2 && (
+                  <Link
+                    href={compareUrl}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium rounded-md transition-colors"
+                  >
+                    <SlidersHorizontal className="w-3 h-3" />
+                    Compare ({enrichedSelectedIds.size})
+                  </Link>
+                )}
               </div>
 
               <div className="space-y-1.5">
-                {pending.map((c) => {
-                  const isEnriching = enrichingIds.has(c.id);
-                  const isSelected = selectedIds.has(c.id);
+                {enriched.map((c, i) => {
+                  const isSelected = enrichedSelectedIds.has(c.id);
                   return (
                     <div
                       key={c.id}
@@ -255,7 +235,80 @@ export default function FirmDetailPage() {
                       <input
                         type="checkbox"
                         checked={isSelected}
-                        onChange={() => toggleSelect(c.id)}
+                        onChange={() => toggleEnrichedSelect(c.id)}
+                        className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-slate-900 cursor-pointer flex-shrink-0"
+                      />
+                      <span className="text-slate-500 text-sm w-5 text-right flex-shrink-0">{i + 1}</span>
+                      <Link href={`/candidates/${c.id}`} className="flex-1 min-w-0">
+                        <p className="font-medium text-slate-100 hover:text-indigo-300 transition-colors truncate">{c.name}</p>
+                        <p className="text-xs text-slate-500 truncate">{c.title}</p>
+                      </Link>
+                      <span className={`flex-shrink-0 px-2.5 py-1 rounded-full border text-xs font-bold ${vibeScoreBg(c.vibeScore)}`}>
+                        <span className="flex items-center gap-1">
+                          <Zap className="w-3 h-3" />
+                          {c.vibeScore}
+                        </span>
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ── Pending section ── */}
+          {pending.length > 0 && (
+            <div>
+              <div className="flex items-center justify-between mb-3 gap-3">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={allPendingSelected}
+                    onChange={() => toggleSelectAllPending(pending)}
+                    className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-slate-900 cursor-pointer"
+                    title="Select all pending"
+                  />
+                  <h2 className="text-sm font-medium text-slate-300">
+                    Pending enrichment ({pending.length})
+                  </h2>
+                </div>
+                <div className="flex items-center gap-2">
+                  {pendingSelectedIds.size > 0 && (
+                    <Button size="sm" onClick={handleEnrichSelected} className="gap-1.5">
+                      <Zap className="w-3 h-3" />
+                      Enrich selected ({pendingSelectedIds.size})
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleEnrichAll}
+                    disabled={enrichingIds.size === pending.length}
+                    className="gap-1.5"
+                  >
+                    <Zap className="w-3 h-3" />
+                    Enrich all
+                  </Button>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                {pending.map((c) => {
+                  const isEnriching = enrichingIds.has(c.id);
+                  const isSelected = pendingSelectedIds.has(c.id);
+                  return (
+                    <div
+                      key={c.id}
+                      className={`flex items-center gap-3 rounded-lg px-4 py-3 border transition-colors ${
+                        isSelected
+                          ? "bg-indigo-900/20 border-indigo-700"
+                          : "bg-slate-800 border-slate-700 hover:border-slate-600"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => togglePendingSelect(c.id)}
                         disabled={isEnriching}
                         className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-slate-900 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40 flex-shrink-0"
                       />

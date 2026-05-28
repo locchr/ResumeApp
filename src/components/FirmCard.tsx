@@ -3,7 +3,7 @@
 import { Firm, Candidate, SECTOR_LABELS } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Building2, Search, Trash2, Users, List, Loader2 } from "lucide-react";
+import { Building2, Search, Trash2, Users, Loader2 } from "lucide-react";
 import Link from "next/link";
 
 interface Props {
@@ -17,21 +17,30 @@ interface Props {
 
 export function FirmCard({ firm, candidates, onDiscover, discovering, discoveryStatus, onDelete }: Props) {
   const enriched = candidates.filter((c) => c.status === "enriched");
+  const pending = candidates.filter((c) => c.status === "pending");
   const avgScore =
     enriched.length > 0
       ? Math.round(enriched.reduce((sum, c) => sum + c.vibeScore, 0) / enriched.length)
       : null;
 
   return (
-    <Card className="hover:border-slate-600 transition-colors">
+    <Card className="hover:border-slate-500 transition-colors">
       <CardContent className="p-5">
+        {/* Header: icon + name/meta + action buttons */}
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-9 h-9 rounded-lg bg-slate-700 flex items-center justify-center flex-shrink-0">
+            <Link
+              href={`/firms/${firm.id}`}
+              className="w-9 h-9 rounded-lg bg-slate-700 hover:bg-slate-600 flex items-center justify-center flex-shrink-0 transition-colors"
+            >
               <Building2 className="w-5 h-5 text-slate-400" />
-            </div>
+            </Link>
             <div className="min-w-0">
-              <h3 className="font-semibold text-slate-100 truncate">{firm.name}</h3>
+              <Link href={`/firms/${firm.id}`}>
+                <h3 className="font-semibold text-slate-100 truncate hover:text-indigo-300 transition-colors">
+                  {firm.name}
+                </h3>
+              </Link>
               <div className="flex items-center gap-3 mt-0.5 text-xs text-slate-500">
                 <span className="flex items-center gap-1">
                   <Users className="w-3 h-3" />
@@ -55,6 +64,7 @@ export function FirmCard({ firm, candidates, onDiscover, discovering, discoveryS
                 onClick={onDiscover}
                 disabled={discovering}
                 className="gap-1.5"
+                title={candidates.length === 0 ? "Search LinkedIn for PMs at this firm" : "Search LinkedIn for more PMs"}
               >
                 {discovering ? (
                   <Loader2 className="w-3 h-3 animate-spin" />
@@ -65,8 +75,12 @@ export function FirmCard({ firm, candidates, onDiscover, discovering, discoveryS
               </Button>
             )}
             {onDelete && (
-              <Button size="icon" variant="ghost" onClick={() => onDelete(firm.id)}
-                className="text-slate-600 hover:text-red-400 w-8 h-8">
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => onDelete(firm.id)}
+                className="text-slate-600 hover:text-red-400 w-8 h-8"
+              >
                 <Trash2 className="w-4 h-4" />
               </Button>
             )}
@@ -77,9 +91,10 @@ export function FirmCard({ firm, candidates, onDiscover, discovering, discoveryS
           <p className="text-xs text-indigo-300 mt-2">{discoveryStatus}</p>
         )}
 
-        {candidates.length > 0 && (
-          <div className="mt-4 pt-3 border-t border-slate-700">
-            <div className="grid grid-cols-3 gap-2 text-center mb-3">
+        {/* Stats block — entire section links to firm detail */}
+        <Link href={`/firms/${firm.id}`} className="block mt-4 pt-3 border-t border-slate-700 group">
+          {candidates.length > 0 ? (
+            <div className="grid grid-cols-3 gap-2 text-center">
               <div>
                 <p className="text-lg font-bold text-slate-100">{candidates.length}</p>
                 <p className="text-xs text-slate-500">Found</p>
@@ -93,13 +108,19 @@ export function FirmCard({ firm, candidates, onDiscover, discovering, discoveryS
                 <p className="text-xs text-slate-500">Avg Score</p>
               </div>
             </div>
-            <Link href={`/firms/${firm.id}`}
-              className="flex items-center justify-center gap-1.5 text-xs text-slate-400 hover:text-indigo-300 transition-colors">
-              <List className="w-3 h-3" />
-              View all PMs
-            </Link>
-          </div>
-        )}
+          ) : (
+            <div className="text-center">
+              {pending.length > 0 ? (
+                <p className="text-xs text-slate-500">{pending.length} pending enrichment</p>
+              ) : (
+                <p className="text-xs text-slate-600 italic">Not yet discovered</p>
+              )}
+            </div>
+          )}
+          <p className="text-xs text-center text-slate-500 group-hover:text-indigo-300 transition-colors mt-2">
+            View all PMs →
+          </p>
+        </Link>
       </CardContent>
     </Card>
   );

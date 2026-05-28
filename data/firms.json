@@ -1,12 +1,12 @@
 [
-  { "id": "apollo", "name": "Apollo Global Management", "aliases": ["Apollo Global", "Apollo"] },
-  { "id": "blackstone", "name": "Blackstone", "aliases": ["Blackstone Group"] },
-  { "id": "blackrock", "name": "BlackRock", "aliases": ["Black Rock"] },
-  { "id": "kkr", "name": "KKR", "aliases": ["Kohlberg Kravis Roberts"] },
-  { "id": "carlyle", "name": "Carlyle Group", "aliases": ["Carlyle"] },
-  { "id": "citadel", "name": "Citadel", "aliases": ["Citadel LLC", "Citadel Securities"] },
-  { "id": "twosigma", "name": "Two Sigma", "aliases": ["Two Sigma Investments"] },
-  { "id": "bridgewater", "name": "Bridgewater Associates", "aliases": ["Bridgewater"] },
-  { "id": "goldman", "name": "Goldman Sachs", "aliases": ["Goldman", "GS"], "division": "Goldman Sachs Asset Management" },
-  { "id": "jpmorgan", "name": "JPMorgan Chase", "aliases": ["JPMorgan", "JP Morgan", "JPMC"], "division": "JPMorgan Asset Management" }
+  { "id": "blackstone", "name": "Blackstone", "aliases": ["Blackstone Group"], "sector": "alternatives" },
+  { "id": "apollo", "name": "Apollo Global Management", "aliases": ["Apollo Global", "Apollo"], "sector": "alternatives" },
+  { "id": "kkr", "name": "KKR", "aliases": ["Kohlberg Kravis Roberts"], "sector": "alternatives" },
+  { "id": "carlyle", "name": "Carlyle Group", "aliases": ["Carlyle"], "sector": "alternatives" },
+  { "id": "ares", "name": "Ares Management", "aliases": ["Ares Capital"], "sector": "alternatives" },
+  { "id": "goldman", "name": "Goldman Sachs", "aliases": ["Goldman", "GS"], "sector": "alternatives", "division": "Goldman Sachs Asset Management" },
+  { "id": "bridgewater", "name": "Bridgewater Associates", "aliases": ["Bridgewater"], "sector": "hedge_fund" },
+  { "id": "citadel", "name": "Citadel", "aliases": ["Citadel LLC", "Citadel Securities"], "sector": "hedge_fund" },
+  { "id": "twosigma", "name": "Two Sigma", "aliases": ["Two Sigma Investments"], "sector": "hedge_fund" },
+  { "id": "blackrock", "name": "BlackRock", "aliases": ["Black Rock"], "sector": "asset_manager" }
 ]
