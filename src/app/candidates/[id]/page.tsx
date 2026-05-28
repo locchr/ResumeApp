@@ -2,9 +2,11 @@ import { notFound } from "next/navigation";
 import { getCandidate } from "@/lib/data";
 import { vibeScoreBg, vibeScoreLabel } from "@/lib/utils";
 import { ScoreBreakdown } from "@/components/ScoreBreakdown";
+import { OutreachBar } from "@/components/OutreachBar";
 import { Badge } from "@/components/ui/badge";
 import { Globe, ArrowLeft, Zap, Star } from "lucide-react";
 import { GitHubIcon, LinkedInIcon } from "@/components/icons";
+import { getScoreExplanation } from "@/lib/scoring";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -19,6 +21,9 @@ export default async function CandidateProfilePage({
   if (!candidate) notFound();
 
   const isEnriched = candidate.status === "enriched";
+  const explanation = isEnriched
+    ? getScoreExplanation(candidate.githubStats, candidate.signals)
+    : undefined;
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
@@ -94,6 +99,13 @@ export default async function CandidateProfilePage({
             <p className="text-sm text-slate-300 italic">"{candidate.assessment}"</p>
           </div>
         )}
+
+        {/* Outreach bar (client component) */}
+        <OutreachBar
+          candidateId={candidate.id}
+          linkedinUrl={candidate.linkedinUrl}
+          outreachStatus={candidate.outreachStatus}
+        />
       </div>
 
       {/* Score breakdown */}
@@ -104,12 +116,13 @@ export default async function CandidateProfilePage({
             breakdown={candidate.scoreBreakdown}
             evidence={candidate.evidence ?? []}
             githubUrl={candidate.githubUrl}
+            explanation={explanation}
           />
           <div className="grid grid-cols-3 gap-3 pt-2">
             {[
               { label: "GitHub", value: candidate.scoreBreakdown.githubActivity, max: 40 },
               { label: "AI Signals", value: candidate.scoreBreakdown.aiToolMentions, max: 40 },
-              { label: "Projects", value: candidate.scoreBreakdown.projectsBuilt, max: 20 },
+              { label: "Impact", value: candidate.scoreBreakdown.projectsBuilt, max: 20 },
             ].map(({ label, value, max }) => (
               <div key={label} className="bg-slate-900 rounded-lg p-3 text-center">
                 <p className="text-xl font-bold text-slate-100">{value}<span className="text-sm text-slate-500">/{max}</span></p>
@@ -142,9 +155,9 @@ export default async function CandidateProfilePage({
             </div>
             <div className="bg-slate-900 rounded-lg p-3">
               <p className="text-xl font-bold text-slate-100">
-                {candidate.githubStats.hasRecentActivity ? "✓" : "✗"}
+                {candidate.githubStats.totalStars ?? 0}
               </p>
-              <p className="text-xs text-slate-500">Recent activity</p>
+              <p className="text-xs text-slate-500">Total stars</p>
             </div>
           </div>
           {candidate.githubStats.topLanguages.length > 0 && (
@@ -153,6 +166,16 @@ export default async function CandidateProfilePage({
               <div className="flex flex-wrap gap-2">
                 {candidate.githubStats.topLanguages.map((lang) => (
                   <Badge key={lang} variant="indigo">{lang}</Badge>
+                ))}
+              </div>
+            </div>
+          )}
+          {candidate.githubStats.aiRepoNames && candidate.githubStats.aiRepoNames.length > 0 && (
+            <div>
+              <p className="text-xs text-slate-500 mb-2">AI-related repos</p>
+              <div className="flex flex-wrap gap-2">
+                {candidate.githubStats.aiRepoNames.map((name) => (
+                  <Badge key={name} variant="default">{name}</Badge>
                 ))}
               </div>
             </div>

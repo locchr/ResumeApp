@@ -68,6 +68,18 @@ export function scoreAIToolMentions(signals: string[]): number {
   return Math.min(score, 40);
 }
 
+function hasDeployedEvidence(signals: string[], githubStats?: GitHubStats | null): boolean {
+  const combined = signals.join(" ").toLowerCase();
+  return (
+    combined.includes("portfolio") ||
+    combined.includes("personal site") ||
+    combined.includes("side project") ||
+    combined.includes("launched") ||
+    (githubStats?.deployedApps ?? 0) > 0 ||
+    !!githubStats?.personalWebsite
+  );
+}
+
 export function scoreProjectsBuilt(
   signals: string[],
   githubStats?: GitHubStats | null
@@ -75,18 +87,17 @@ export function scoreProjectsBuilt(
   const combined = signals.join(" ").toLowerCase();
   let score = 0;
 
-  const hasPortfolio =
-    combined.includes("portfolio") ||
-    combined.includes("personal site") ||
-    combined.includes("built") ||
-    combined.includes("side project") ||
-    combined.includes("launched") ||
-    (githubStats?.deployedApps ?? 0) > 0 ||
-    !!githubStats?.personalWebsite;
+  // Built something visible online (+5)
+  if (hasDeployedEvidence(signals, githubStats)) score += 5;
 
-  if (hasPortfolio) score += 10;
+  // Real adoption: stars ≥ 20 means actual users (+5)
+  if ((githubStats?.totalStars ?? 0) >= 20) score += 5;
 
-  if (combined.includes("product hunt")) score += 10;
+  // Others build on their work: forks ≥ 5 (+5)
+  if ((githubStats?.totalForks ?? 0) >= 5) score += 5;
+
+  // Deliberately shipped publicly (+5)
+  if (combined.includes("product hunt")) score += 5;
 
   return Math.min(score, 20);
 }
@@ -210,4 +221,48 @@ export function extractSignalsFromSearchResults(
   }
 
   return [...new Set(signals)];
+}
+
+export interface ScoreCriterion {
+  label: string;
+  achieved: boolean;
+  pts: number;
+}
+
+export interface ScoreExplanation {
+  githubActivity: ScoreCriterion[];
+  aiToolMentions: ScoreCriterion[];
+  projectsBuilt: ScoreCriterion[];
+}
+
+export function getScoreExplanation(
+  githubStats: GitHubStats | null | undefined,
+  signals: string[]
+): ScoreExplanation {
+  const combined = signals.join(" ").toLowerCase();
+  const aiLanguages = ["Python", "TypeScript", "JavaScript", "Jupyter Notebook"];
+  const hasAiTools = scoreAIToolMentions(signals) > 0;
+  const hasVibePhrases = VIBE_CODING_PHRASES.some((p) => combined.includes(p));
+
+  return {
+    githubActivity: [
+      { label: "GitHub profile found", achieved: !!githubStats, pts: 10 },
+      { label: "Active commits in last 6 months", achieved: githubStats?.hasRecentActivity ?? false, pts: 10 },
+      { label: "5+ public repos", achieved: (githubStats?.publicRepos ?? 0) >= 5, pts: 5 },
+      { label: "AI languages (Python / JS / TS)", achieved: githubStats?.topLanguages.some((l) => aiLanguages.includes(l)) ?? false, pts: 5 },
+      { label: "AI-focused repos (by topic or name)", achieved: (githubStats?.aiTopicRepos ?? 0) >= 1, pts: 10 },
+    ],
+    aiToolMentions: [
+      { label: "AI tools mentioned online (Cursor, Claude…)", achieved: hasAiTools, pts: 8 },
+      { label: "Vibe coding content found (building with AI…)", achieved: hasVibePhrases, pts: 16 },
+      { label: "Active on LinkedIn about AI", achieved: combined.includes("active on linkedin about ai"), pts: 8 },
+      { label: "Medium or blog author on AI", achieved: combined.includes("medium author on ai"), pts: 8 },
+    ],
+    projectsBuilt: [
+      { label: "Deployed app or personal site", achieved: hasDeployedEvidence(signals, githubStats), pts: 5 },
+      { label: "GitHub stars ≥ 20 (real adoption)", achieved: (githubStats?.totalStars ?? 0) >= 20, pts: 5 },
+      { label: "GitHub forks ≥ 5 (others build on their work)", achieved: (githubStats?.totalForks ?? 0) >= 5, pts: 5 },
+      { label: "Product Hunt listing", achieved: combined.includes("product hunt"), pts: 5 },
+    ],
+  };
 }

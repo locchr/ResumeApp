@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect, useCallback, Suspense } from "react";
+import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { Firm, Candidate } from "@/lib/types";
 import { CandidateCard } from "@/components/CandidateCard";
 import { Button } from "@/components/ui/button";
-import { Loader2, Search, Zap, User, Building2 } from "lucide-react";
+import { Loader2, Search, User, Building2 } from "lucide-react";
 
 type SearchMode = "firm" | "name";
 
@@ -23,9 +23,11 @@ function SearchPageInner() {
   const [enrichingId, setEnrichingId] = useState<string | null>(null);
   const [status, setStatus] = useState("");
   const [batchEnriching, setBatchEnriching] = useState(false);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     fetch("/api/firms").then((r) => r.json()).then(setFirms);
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, []);
 
   const selectedFirm = firms.find((f) => f.id === selectedFirmId);
@@ -34,6 +36,7 @@ function SearchPageInner() {
     const res = await fetch(`/api/candidates?firm=${encodeURIComponent(firmName)}`);
     const data = await res.json();
     setCandidates(data);
+    return data as Candidate[];
   }, []);
 
   useEffect(() => {
@@ -45,16 +48,68 @@ function SearchPageInner() {
     setCandidates([]);
     setStatus("");
     setNameResultIds([]);
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+  }
+
+  function startFirmEnrichPoll(firmName: string) {
+    if (pollRef.current) clearInterval(pollRef.current);
+    setBatchEnriching(true);
+
+    fetch("/api/enrich/batch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ firm: firmName }),
+    });
+
+    pollRef.current = setInterval(async () => {
+      const c: Candidate[] = await fetch(`/api/candidates?firm=${encodeURIComponent(firmName)}`).then((r) => r.json());
+      setCandidates(c);
+      const stillPending = c.filter((x) => x.status === "pending").length;
+      const done = c.filter((x) => x.status === "enriched").length;
+      if (stillPending === 0) {
+        clearInterval(pollRef.current!);
+        pollRef.current = null;
+        setBatchEnriching(false);
+        setStatus(`All ${done} candidate${done !== 1 ? "s" : ""} enriched`);
+      } else {
+        setStatus(`Enriching… ${done} done, ${stillPending} remaining`);
+      }
+    }, 3000);
+  }
+
+  function startNameEnrichPoll(ids: string[]) {
+    if (pollRef.current) clearInterval(pollRef.current);
+    setEnrichingId(ids[0] ?? null);
+
+    // Fire enrichment for all pending IDs (don't await — let server handle them)
+    ids.forEach((id) => fetch(`/api/enrich/${id}`, { method: "POST" }).catch(() => {}));
+
+    pollRef.current = setInterval(async () => {
+      const all: Candidate[] = await fetch("/api/candidates").then((r) => r.json());
+      const updated = all.filter((c) => ids.includes(c.id));
+      setCandidates(updated);
+      const stillPending = updated.filter((c) => c.status === "pending").length;
+      if (stillPending === 0) {
+        clearInterval(pollRef.current!);
+        pollRef.current = null;
+        setEnrichingId(null);
+        setStatus("Enrichment complete");
+      } else {
+        setStatus(`Enriching… ${updated.filter((c) => c.status === "enriched").length} done`);
+      }
+    }, 3000);
   }
 
   const canSearch = mode === "firm" ? !!selectedFirmId : !!personName.trim();
 
   async function handleSearch() {
     if (!canSearch) return;
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+
     setSearching(true);
     setStatus(mode === "firm"
-      ? "Searching LinkedIn for product managers..."
-      : `Searching LinkedIn for "${personName.trim()}"...`);
+      ? "Searching LinkedIn for product managers…"
+      : `Searching LinkedIn for "${personName.trim()}"…`);
 
     try {
       const body = mode === "firm"
@@ -73,65 +128,39 @@ function SearchPageInner() {
 
       if (!res.ok) {
         setStatus(`Error: ${data.error}`);
-      } else if (mode === "firm") {
-        setStatus(`Found ${data.found} new candidates`);
-        loadCandidates(selectedFirm!.name);
-      } else {
-        if (data.found > 0) {
-          setStatus(`Found ${data.found} candidate${data.found === 1 ? "" : "s"}`);
+        return;
+      }
+
+      if (mode === "firm") {
+        const allForFirm = await loadCandidates(selectedFirm!.name);
+        const pendingCount = allForFirm.filter((c) => c.status === "pending").length;
+        if (pendingCount > 0) {
+          setStatus(`Found ${data.found} new candidates — enriching now…`);
+          startFirmEnrichPoll(selectedFirm!.name);
         } else {
-          setStatus("No new results. If this person is already in your database, search for them on the Candidates page.");
+          setStatus(`Found ${data.found} new candidates`);
         }
-        setCandidates(data.candidates);
-        setNameResultIds((data.candidates as Candidate[]).map((c) => c.id));
+      } else {
+        const foundCandidates = data.candidates as Candidate[];
+        setCandidates(foundCandidates);
+        const foundIds = foundCandidates.map((c: Candidate) => c.id);
+        setNameResultIds(foundIds);
+        const pendingIds = foundCandidates.filter((c: Candidate) => c.status === "pending").map((c: Candidate) => c.id);
+
+        if (data.found === 0 && foundCandidates.length === 0) {
+          setStatus("No results found. If this person is already in your database, search on the Candidates page.");
+        } else if (pendingIds.length > 0) {
+          setStatus(`Found ${foundCandidates.length} candidate${foundCandidates.length !== 1 ? "s" : ""} — enriching…`);
+          startNameEnrichPoll(pendingIds);
+        } else {
+          setStatus(`Found ${foundCandidates.length} candidate${foundCandidates.length !== 1 ? "s" : ""}`);
+        }
       }
     } catch (err) {
       setStatus(`Error: ${err instanceof Error ? err.message : "Unknown"}`);
     } finally {
       setSearching(false);
     }
-  }
-
-  async function handleEnrich(id: string) {
-    setEnrichingId(id);
-    try {
-      const res = await fetch(`/api/enrich/${id}`, { method: "POST" });
-      if (res.ok) {
-        if (mode === "firm" && selectedFirm) {
-          loadCandidates(selectedFirm.name);
-        } else {
-          const all: Candidate[] = await fetch("/api/candidates").then((r) => r.json());
-          const ids = nameResultIds;
-          setCandidates(all.filter((c) => ids.includes(c.id)));
-        }
-      }
-    } finally {
-      setEnrichingId(null);
-    }
-  }
-
-  async function handleBatchEnrich() {
-    if (!selectedFirm || mode !== "firm") return;
-    setBatchEnriching(true);
-    setStatus("Enriching all pending candidates...");
-    await fetch("/api/enrich/batch", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ firm: selectedFirm.name }),
-    });
-
-    const poll = setInterval(async () => {
-      await loadCandidates(selectedFirm.name);
-      const c: Candidate[] = await fetch(`/api/candidates?firm=${encodeURIComponent(selectedFirm.name)}`).then((r) => r.json());
-      const stillPending = c.filter((x) => x.status === "pending").length;
-      setStatus(`Enriching... ${c.filter((x) => x.status === "enriched").length} done, ${stillPending} remaining`);
-      if (stillPending === 0) {
-        clearInterval(poll);
-        setBatchEnriching(false);
-        setStatus("All candidates enriched!");
-        loadCandidates(selectedFirm.name);
-      }
-    }, 3000);
   }
 
   const pending = candidates.filter((c) => c.status === "pending");
@@ -184,9 +213,9 @@ function SearchPageInner() {
                 <option key={f.id} value={f.id}>{f.name}</option>
               ))}
             </select>
-            <Button onClick={handleSearch} disabled={!canSearch || searching} className="gap-2">
+            <Button onClick={handleSearch} disabled={!canSearch || searching || batchEnriching} className="gap-2">
               {searching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-              {searching ? "Searching..." : "Search LinkedIn"}
+              {searching ? "Searching…" : "Search LinkedIn"}
             </Button>
           </div>
         ) : (
@@ -210,34 +239,30 @@ function SearchPageInner() {
                 <option key={f.id} value={f.id}>{f.name}</option>
               ))}
             </select>
-            <Button onClick={handleSearch} disabled={!canSearch || searching} className="gap-2">
+            <Button onClick={handleSearch} disabled={!canSearch || searching || !!enrichingId} className="gap-2">
               {searching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-              {searching ? "Searching..." : "Search by Name"}
+              {searching ? "Searching…" : "Search by Name"}
             </Button>
           </div>
         )}
 
         {status && (
-          <p className="text-sm text-slate-400 bg-slate-900 rounded px-3 py-2">{status}</p>
+          <div className="flex items-center gap-2 text-sm text-slate-400 bg-slate-900 rounded px-3 py-2">
+            {(batchEnriching || enrichingId) && (
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400 flex-shrink-0" />
+            )}
+            {status}
+          </div>
         )}
       </div>
 
       {/* Results */}
       {candidates.length > 0 && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-slate-400">
-              <span className="text-slate-200 font-medium">{candidates.length}</span> candidate{candidates.length !== 1 ? "s" : ""}{mode === "firm" && selectedFirm ? ` for ${selectedFirm.name}` : ""} ·{" "}
-              <span className="text-amber-400 font-medium">{enriched.length}</span> enriched ·{" "}
-              <span className="text-slate-400">{pending.length}</span> pending
-            </div>
-            {pending.length > 0 && mode === "firm" && (
-              <Button size="sm" variant="outline" onClick={handleBatchEnrich}
-                disabled={batchEnriching} className="gap-2">
-                {batchEnriching ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
-                Enrich All ({pending.length})
-              </Button>
-            )}
+          <div className="text-sm text-slate-400">
+            <span className="text-slate-200 font-medium">{candidates.length}</span> candidate{candidates.length !== 1 ? "s" : ""}{mode === "firm" && selectedFirm ? ` for ${selectedFirm.name}` : ""} ·{" "}
+            <span className="text-amber-400 font-medium">{enriched.length}</span> enriched ·{" "}
+            <span className="text-slate-400">{pending.length}</span> pending
           </div>
 
           {enriched.length > 0 && (
@@ -253,13 +278,20 @@ function SearchPageInner() {
 
           {pending.length > 0 && (
             <div>
-              <h3 className="text-sm font-medium text-slate-300 mb-3">Pending enrichment</h3>
+              <h3 className="text-sm font-medium text-slate-300 mb-3">
+                Pending enrichment
+                {(batchEnriching || enrichingId) && (
+                  <span className="ml-2 text-xs text-indigo-400 font-normal">
+                    <Loader2 className="w-3 h-3 animate-spin inline mr-1" />
+                    Enriching automatically…
+                  </span>
+                )}
+              </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {pending.map((c) => (
                   <CandidateCard
                     key={c.id}
                     candidate={c}
-                    onEnrich={handleEnrich}
                     enriching={enrichingId === c.id}
                   />
                 ))}

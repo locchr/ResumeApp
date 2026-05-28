@@ -1,3 +1,7 @@
+import type { GitHubStats } from "./github";
+
+export type { GitHubStats };
+
 export type FirmSector = "investment_bank" | "retail_bank" | "asset_manager" | "alternatives" | "hedge_fund" | "other";
 
 export const SECTOR_LABELS: Record<FirmSector, string> = {
@@ -44,16 +48,8 @@ export interface Candidate {
   signals: string[];
   evidence: Evidence[];
   assessment: string;
-  githubStats?: {
-    publicRepos: number;
-    followers: number;
-    recentCommits: number;
-    topLanguages: string[];
-    hasRecentActivity: boolean;
-    profileUrl: string;
-    avatarUrl?: string;
-    bio?: string;
-  };
+  githubStats?: GitHubStats;
+  outreachStatus?: "none" | "reached_out" | "responded" | "not_interested";
   enrichedAt?: string;
   status: 'pending' | 'enriched' | 'error';
   errorMessage?: string;

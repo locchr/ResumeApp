@@ -26,6 +26,7 @@ export interface GitHubStats {
   deployedApps: number;
   personalWebsite?: string;
   totalStars: number;
+  totalForks: number;
   aiRepoNames: string[];
 }
 
@@ -96,6 +97,7 @@ export async function getGitHubStats(username: string): Promise<GitHubStats | nu
     let aiTopicRepos = 0;
     let deployedApps = 0;
     let totalStars = 0;
+    let totalForks = 0;
     const aiRepoNames: string[] = [];
 
     for (const repo of repos) {
@@ -103,6 +105,7 @@ export async function getGitHubStats(username: string): Promise<GitHubStats | nu
         languageCount[repo.language] = (languageCount[repo.language] ?? 0) + 1;
       }
       totalStars += repo.stargazers_count ?? 0;
+      totalForks += repo.forks_count ?? 0;
       if (repo.homepage) deployedApps++;
 
       // Check repo topics, name, and description for AI signals
@@ -157,6 +160,7 @@ export async function getGitHubStats(username: string): Promise<GitHubStats | nu
       deployedApps,
       personalWebsite: user.blog || undefined,
       totalStars,
+      totalForks,
       aiRepoNames: aiRepoNames.slice(0, 10),
     };
   } catch {

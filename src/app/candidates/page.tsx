@@ -5,7 +5,7 @@ import { Candidate } from "@/lib/types";
 import { vibeScoreBg, vibeScoreLabel } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowUpDown, Download, Trash2, Zap, Search, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowUpDown, Download, Trash2, Zap, Search, ChevronLeft, ChevronRight, SlidersHorizontal } from "lucide-react";
 import { GitHubIcon, LinkedInIcon } from "@/components/icons";
 import Link from "next/link";
 
@@ -20,6 +20,7 @@ export default function CandidatesPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [nameQuery, setNameQuery] = useState("");
   const [page, setPage] = useState(1);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     const data = await fetch("/api/candidates").then((r) => r.json());
@@ -38,7 +39,17 @@ export default function CandidatesPage() {
 
   async function handleDelete(id: string) {
     await fetch(`/api/candidates?id=${id}`, { method: "DELETE" });
+    setSelectedIds((prev) => { const next = new Set(prev); next.delete(id); return next; });
     load();
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else if (next.size < 5) next.add(id);
+      return next;
+    });
   }
 
   const firms = useMemo(() => [...new Set(candidates.map((c) => c.firm))].sort(), [candidates]);
@@ -75,8 +86,10 @@ export default function CandidatesPage() {
     </button>
   );
 
+  const compareUrl = `/compare?ids=${[...selectedIds].join(",")}`;
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-20">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-100">Candidates</h1>
@@ -140,6 +153,9 @@ export default function CandidatesPage() {
             <table className="w-full text-sm">
               <thead className="bg-slate-800 border-b border-slate-700">
                 <tr>
+                  <th className="px-3 py-3 w-8">
+                    <SlidersHorizontal className="w-3.5 h-3.5 text-slate-600 mx-auto" />
+                  </th>
                   <th className="text-left px-4 py-3"><SortBtn col="name" label="Name" /></th>
                   <th className="text-left px-4 py-3 hidden md:table-cell">Title</th>
                   <th className="text-left px-4 py-3 hidden lg:table-cell"><SortBtn col="firm" label="Firm" /></th>
@@ -152,7 +168,16 @@ export default function CandidatesPage() {
               </thead>
               <tbody className="divide-y divide-slate-700/50">
                 {paginated.map((c) => (
-                  <tr key={c.id} className="hover:bg-slate-800/50 transition-colors">
+                  <tr key={c.id} className={`hover:bg-slate-800/50 transition-colors ${selectedIds.has(c.id) ? "bg-indigo-900/20" : ""}`}>
+                    <td className="px-3 py-3 text-center">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(c.id)}
+                        onChange={() => toggleSelect(c.id)}
+                        disabled={!selectedIds.has(c.id) && selectedIds.size >= 5}
+                        className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-slate-900 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+                      />
+                    </td>
                     <td className="px-4 py-3">
                       <Link href={`/candidates/${c.id}`} className="font-medium text-slate-100 hover:text-indigo-300 transition-colors">
                         {c.name}
@@ -228,6 +253,32 @@ export default function CandidatesPage() {
             </div>
           )}
         </>
+      )}
+
+      {/* Compare bar */}
+      {selectedIds.size >= 2 && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-slate-900/95 backdrop-blur border-t border-slate-700 px-6 py-3 flex items-center justify-between gap-4">
+          <span className="text-sm text-slate-300">
+            <span className="font-semibold text-slate-100">{selectedIds.size}</span> candidates selected
+            {selectedIds.size < 5 && (
+              <span className="text-slate-500 ml-1">(up to 5)</span>
+            )}
+          </span>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setSelectedIds(new Set())}
+              className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
+            >
+              Clear
+            </button>
+            <Link
+              href={compareUrl}
+              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg transition-colors"
+            >
+              Compare →
+            </Link>
+          </div>
+        </div>
       )}
     </div>
   );

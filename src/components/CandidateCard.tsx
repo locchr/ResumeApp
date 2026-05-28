@@ -70,13 +70,24 @@ export function CandidateCard({ candidate, onEnrich, enriching }: Props) {
               <p className="text-xs text-slate-400 mt-2 italic">"{candidate.assessment}"</p>
             )}
 
-            {/* Score label */}
-            {isEnriched && (
-              <div className="flex items-center gap-1 mt-1.5">
-                <Zap className="w-3 h-3 text-amber-400" />
-                <span className="text-xs text-amber-400 font-medium">{vibeScoreLabel(candidate.vibeScore)}</span>
-              </div>
-            )}
+            {/* Score label + outreach status */}
+            <div className="flex items-center gap-2 mt-1.5">
+              {isEnriched && (
+                <>
+                  <Zap className="w-3 h-3 text-amber-400" />
+                  <span className="text-xs text-amber-400 font-medium">{vibeScoreLabel(candidate.vibeScore)}</span>
+                </>
+              )}
+              {candidate.outreachStatus === "reached_out" && (
+                <span className="text-xs px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/40">Reached out</span>
+              )}
+              {candidate.outreachStatus === "responded" && (
+                <span className="text-xs px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">Responded</span>
+              )}
+              {candidate.outreachStatus === "not_interested" && (
+                <span className="text-xs px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/40">Not interested</span>
+              )}
+            </div>
 
             {/* Signals */}
             {isEnriched && candidate.signals.length > 0 && (
