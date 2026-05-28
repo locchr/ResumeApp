@@ -92,7 +92,7 @@ export default function CandidatesPage() {
     <div className="space-y-6 pb-20">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-100">Candidates</h1>
+          <h1 className="text-2xl font-bold text-slate-100">Leaderboard</h1>
           <p className="text-slate-400 text-sm mt-1">
             {filtered.length > 0
               ? `Showing ${start}–${end} of ${filtered.length} candidates`
@@ -106,35 +106,61 @@ export default function CandidatesPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-3">
-        {/* Name search */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
-          <input
-            type="text"
-            value={nameQuery}
-            onChange={(e) => setNameQuery(e.target.value)}
-            placeholder="Search by name..."
-            className="pl-8 pr-3 py-1.5 bg-slate-800 border border-slate-600 rounded-md text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 w-48"
-          />
+      <div className="space-y-3">
+        <div className="flex flex-wrap gap-3">
+          {/* Name search */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
+            <input
+              type="text"
+              value={nameQuery}
+              onChange={(e) => setNameQuery(e.target.value)}
+              placeholder="Search by name..."
+              className="pl-8 pr-3 py-1.5 bg-slate-800 border border-slate-600 rounded-md text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 w-48"
+            />
+          </div>
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
+            className="bg-slate-800 border border-slate-600 rounded-md px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <option value="">All statuses</option>
+            <option value="enriched">Enriched</option>
+            <option value="pending">Pending</option>
+            <option value="error">Error</option>
+          </select>
+          {(nameQuery || firmFilter || statusFilter) && (
+            <button onClick={() => { setNameQuery(""); setFirmFilter(""); setStatusFilter(""); }}
+              className="text-xs text-slate-500 hover:text-slate-300 transition-colors px-2">
+              Clear filters
+            </button>
+          )}
         </div>
-        <select value={firmFilter} onChange={(e) => setFirmFilter(e.target.value)}
-          className="bg-slate-800 border border-slate-600 rounded-md px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-          <option value="">All firms</option>
-          {firms.map((f) => <option key={f} value={f}>{f}</option>)}
-        </select>
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
-          className="bg-slate-800 border border-slate-600 rounded-md px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-          <option value="">All statuses</option>
-          <option value="enriched">Enriched</option>
-          <option value="pending">Pending</option>
-          <option value="error">Error</option>
-        </select>
-        {(nameQuery || firmFilter || statusFilter) && (
-          <button onClick={() => { setNameQuery(""); setFirmFilter(""); setStatusFilter(""); }}
-            className="text-xs text-slate-500 hover:text-slate-300 transition-colors px-2">
-            Clear filters
-          </button>
+
+        {/* Firm pills */}
+        {firms.length > 0 && (
+          <div className="flex gap-2 overflow-x-auto pb-0.5">
+            <button
+              onClick={() => setFirmFilter("")}
+              className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-colors border ${
+                firmFilter === ""
+                  ? "bg-indigo-600 border-indigo-500 text-white"
+                  : "border-slate-600 text-slate-400 hover:border-slate-400 hover:text-slate-200"
+              }`}
+            >
+              All firms
+            </button>
+            {firms.map((f) => (
+              <button
+                key={f}
+                onClick={() => setFirmFilter(firmFilter === f ? "" : f)}
+                className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-colors border ${
+                  firmFilter === f
+                    ? "bg-indigo-600 border-indigo-500 text-white"
+                    : "border-slate-600 text-slate-400 hover:border-slate-400 hover:text-slate-200"
+                }`}
+              >
+                {f}
+              </button>
+            ))}
+          </div>
         )}
       </div>
 
@@ -144,7 +170,7 @@ export default function CandidatesPage() {
           {nameQuery ? (
             <p className="text-slate-400">No candidates match "<span className="text-slate-200">{nameQuery}</span>".</p>
           ) : (
-            <p className="text-slate-400">No candidates found. <Link href="/search" className="text-indigo-400 hover:underline">Start a search</Link>.</p>
+            <p className="text-slate-400">No candidates found. <Link href="/lookup" className="text-indigo-400 hover:underline">Find a PM</Link>.</p>
           )}
         </div>
       ) : (

@@ -3,13 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, Search, Users, Building2, Download } from "lucide-react";
+import { Trophy, User, Settings, Download } from "lucide-react";
 
 const nav = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/firms", label: "Firms", icon: Building2 },
-  { href: "/search", label: "Search", icon: Search },
-  { href: "/candidates", label: "Candidates", icon: Users },
+  { href: "/candidates", label: "Leaderboard", icon: Trophy },
+  { href: "/lookup", label: "Find Person", icon: User },
 ];
 
 export function NavBar() {
@@ -30,7 +28,7 @@ export function NavBar() {
               href={href}
               className={cn(
                 "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm transition-colors",
-                pathname === href
+                pathname === href || pathname.startsWith(href + "/")
                   ? "bg-slate-700 text-slate-100"
                   : "text-slate-400 hover:text-slate-200 hover:bg-slate-800"
               )}
@@ -41,13 +39,27 @@ export function NavBar() {
           ))}
         </nav>
 
-        <a
-          href="/api/export"
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors"
-        >
-          <Download className="w-4 h-4" />
-          <span className="hidden sm:block">Export CSV</span>
-        </a>
+        <div className="flex items-center gap-1">
+          <Link
+            href="/firms"
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm transition-colors",
+              pathname === "/firms" || pathname.startsWith("/firms/")
+                ? "bg-slate-700 text-slate-100"
+                : "text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+            )}
+          >
+            <Settings className="w-4 h-4" />
+            <span className="hidden sm:block">Firms</span>
+          </Link>
+          <a
+            href="/api/export"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors"
+          >
+            <Download className="w-4 h-4" />
+            <span className="hidden sm:block">Export</span>
+          </a>
+        </div>
       </div>
     </header>
   );
