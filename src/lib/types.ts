@@ -18,6 +18,7 @@ export interface Firm {
   name: string;
   aliases: string[];
   sector?: FirmSector;
+  division?: string;
 }
 
 export interface ScoreBreakdown {

@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
 import { Firm, Candidate, SECTOR_LABELS } from "@/lib/types";
 import { vibeScoreBg } from "@/lib/utils";
-import { CandidateCard } from "@/components/CandidateCard";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Search, Zap, Loader2 } from "lucide-react";
 import Link from "next/link";
@@ -16,18 +15,20 @@ export default function FirmDetailPage() {
   const [firm, setFirm] = useState<Firm | null>(null);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [discovering, setDiscovering] = useState(false);
-  const [enriching, setEnriching] = useState(false);
+  const [enrichingIds, setEnrichingIds] = useState<Set<string>>(new Set());
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [status, setStatus] = useState("");
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const discoverPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+    return () => { if (discoverPollRef.current) clearInterval(discoverPollRef.current); };
   }, []);
 
   const loadCandidates = useCallback(async (firmName: string) => {
     const c: Candidate[] = await fetch(`/api/candidates?firm=${encodeURIComponent(firmName)}`).then((r) => r.json());
-    setCandidates(c.sort((a, b) => b.vibeScore - a.vibeScore));
-    return c;
+    const sorted = c.sort((a, b) => b.vibeScore - a.vibeScore);
+    setCandidates(sorted);
+    return sorted;
   }, []);
 
   useEffect(() => {
@@ -41,61 +42,79 @@ export default function FirmDetailPage() {
     init();
   }, [id, loadCandidates]);
 
-  function startEnrichPoll(firmName: string) {
-    if (pollRef.current) clearInterval(pollRef.current);
-    setEnriching(true);
-
-    fetch("/api/enrich/batch", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ firm: firmName }),
-    });
-
-    pollRef.current = setInterval(async () => {
-      const updated = await loadCandidates(firmName);
-      const stillPending = updated.filter((c) => c.status === "pending").length;
-      const done = updated.filter((c) => c.status === "enriched").length;
-      if (stillPending === 0) {
-        clearInterval(pollRef.current!);
-        pollRef.current = null;
-        setEnriching(false);
-        setDiscovering(false);
-        setStatus(`${done} candidate${done !== 1 ? "s" : ""} enriched`);
-      } else {
-        setStatus(`Enriching… ${done} done, ${stillPending} remaining`);
-      }
-    }, 3000);
-  }
-
   async function handleDiscover() {
-    if (!firm || discovering || enriching) return;
+    if (!firm || discovering) return;
     setDiscovering(true);
     setStatus("Searching LinkedIn…");
     try {
       await fetch("/api/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ firmName: firm.name, firmId: firm.id }),
+        body: JSON.stringify({ firmName: firm.name, firmId: firm.id, division: firm.division }),
       });
       const fresh = await loadCandidates(firm.name);
       const pendingCount = fresh.filter((c) => c.status === "pending").length;
-      if (pendingCount > 0) {
-        setStatus(`Found new candidates — enriching…`);
-        startEnrichPoll(firm.name);
-      } else {
+      if (pendingCount === 0) {
         setDiscovering(false);
         setStatus("Search complete");
+        return;
       }
+      setStatus(`Found ${pendingCount} new candidate${pendingCount !== 1 ? "s" : ""} — click Enrich to score them`);
+      setDiscovering(false);
     } catch {
       setStatus("Error — try again");
       setDiscovering(false);
     }
   }
 
-  async function handleEnrichAll() {
-    if (!firm || enriching) return;
-    setStatus("Enriching…");
-    startEnrichPoll(firm.name);
+  async function enrichOne(candidateId: string, firmName: string) {
+    setEnrichingIds((prev) => new Set(prev).add(candidateId));
+    try {
+      await fetch(`/api/enrich/${candidateId}`, { method: "POST" });
+      // Poll this candidate until no longer pending
+      const poll = setInterval(async () => {
+        const c: Candidate[] = await fetch(`/api/candidates?firm=${encodeURIComponent(firmName)}`).then((r) => r.json());
+        const updated = c.find((x) => x.id === candidateId);
+        if (!updated || updated.status !== "pending") {
+          clearInterval(poll);
+          setEnrichingIds((prev) => { const next = new Set(prev); next.delete(candidateId); return next; });
+          setCandidates(c.sort((a, b) => b.vibeScore - a.vibeScore));
+        }
+      }, 3000);
+    } catch {
+      setEnrichingIds((prev) => { const next = new Set(prev); next.delete(candidateId); return next; });
+    }
+  }
+
+  function handleEnrichSelected() {
+    if (!firm) return;
+    const ids = [...selectedIds];
+    setSelectedIds(new Set());
+    ids.forEach((cid) => enrichOne(cid, firm.name));
+  }
+
+  function handleEnrichAll() {
+    if (!firm) return;
+    const pendingIds = candidates.filter((c) => c.status === "pending").map((c) => c.id);
+    setSelectedIds(new Set());
+    pendingIds.forEach((cid) => enrichOne(cid, firm.name));
+  }
+
+  function toggleSelect(cid: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(cid)) next.delete(cid); else next.add(cid);
+      return next;
+    });
+  }
+
+  function toggleSelectAll(pending: Candidate[]) {
+    const allSelected = pending.every((c) => selectedIds.has(c.id));
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(pending.map((c) => c.id)));
+    }
   }
 
   if (!firm) {
@@ -108,13 +127,13 @@ export default function FirmDetailPage() {
     enriched.length > 0
       ? Math.round(enriched.reduce((s, c) => s + c.vibeScore, 0) / enriched.length)
       : null;
-  const isWorking = discovering || enriching;
+  const allPendingSelected = pending.length > 0 && pending.every((c) => selectedIds.has(c.id));
 
   return (
     <div className="space-y-6">
       <Link href="/" className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-slate-200 transition-colors">
         <ArrowLeft className="w-4 h-4" />
-        Back to pipeline
+        Back to dashboard
       </Link>
 
       <div className="flex items-start justify-between gap-4">
@@ -123,16 +142,19 @@ export default function FirmDetailPage() {
           {firm.sector && (
             <p className="text-sm text-indigo-400 mt-0.5">{SECTOR_LABELS[firm.sector]}</p>
           )}
+          {firm.division && (
+            <p className="text-xs text-slate-500 mt-0.5">Searching: {firm.division}</p>
+          )}
         </div>
-        <Button variant="outline" onClick={handleDiscover} disabled={isWorking} className="gap-2 flex-shrink-0">
-          {isWorking ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+        <Button variant="outline" onClick={handleDiscover} disabled={discovering} className="gap-2 flex-shrink-0">
+          {discovering ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
           {candidates.length === 0 ? "Discover PMs" : "Search more"}
         </Button>
       </div>
 
       {status && (
         <div className="flex items-center gap-2 text-sm text-slate-400 bg-slate-800 rounded px-3 py-2">
-          {isWorking && <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400 flex-shrink-0" />}
+          {discovering && <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400 flex-shrink-0" />}
           {status}
         </div>
       )}
@@ -155,13 +177,14 @@ export default function FirmDetailPage() {
         <div className="text-center py-16 border border-dashed border-slate-700 rounded-lg">
           <Zap className="w-10 h-10 text-slate-600 mx-auto mb-3" />
           <p className="text-slate-400 mb-4">No product managers found yet.</p>
-          <Button onClick={handleDiscover} disabled={isWorking} className="gap-2">
-            {isWorking && <Loader2 className="w-4 h-4 animate-spin" />}
+          <Button onClick={handleDiscover} disabled={discovering} className="gap-2">
+            {discovering && <Loader2 className="w-4 h-4 animate-spin" />}
             Discover PMs
           </Button>
         </div>
       ) : (
         <div className="space-y-6">
+          {/* Enriched */}
           {enriched.length > 0 && (
             <div>
               <h2 className="text-sm font-medium text-slate-300 mb-3">Enriched · sorted by vibe score</h2>
@@ -185,21 +208,88 @@ export default function FirmDetailPage() {
             </div>
           )}
 
+          {/* Pending */}
           {pending.length > 0 && (
             <div>
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-sm font-medium text-slate-300">
-                  Pending enrichment ({pending.length})
-                </h2>
-                {!enriching && (
-                  <Button size="sm" variant="outline" onClick={handleEnrichAll} className="gap-1.5">
+              <div className="flex items-center justify-between mb-3 gap-3">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={allPendingSelected}
+                    onChange={() => toggleSelectAll(pending)}
+                    className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-slate-900 cursor-pointer"
+                    title="Select all pending"
+                  />
+                  <h2 className="text-sm font-medium text-slate-300">
+                    Pending enrichment ({pending.length})
+                  </h2>
+                </div>
+                <div className="flex items-center gap-2">
+                  {selectedIds.size > 0 && (
+                    <Button size="sm" onClick={handleEnrichSelected} className="gap-1.5">
+                      <Zap className="w-3 h-3" />
+                      Enrich selected ({selectedIds.size})
+                    </Button>
+                  )}
+                  <Button size="sm" variant="outline" onClick={handleEnrichAll} className="gap-1.5"
+                    disabled={enrichingIds.size === pending.length}>
                     <Zap className="w-3 h-3" />
                     Enrich all
                   </Button>
-                )}
+                </div>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {pending.map((c) => <CandidateCard key={c.id} candidate={c} />)}
+
+              <div className="space-y-1.5">
+                {pending.map((c) => {
+                  const isEnriching = enrichingIds.has(c.id);
+                  const isSelected = selectedIds.has(c.id);
+                  return (
+                    <div
+                      key={c.id}
+                      className={`flex items-center gap-3 rounded-lg px-4 py-3 border transition-colors ${
+                        isSelected
+                          ? "bg-indigo-900/20 border-indigo-700"
+                          : "bg-slate-800 border-slate-700 hover:border-slate-600"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleSelect(c.id)}
+                        disabled={isEnriching}
+                        className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-slate-900 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40 flex-shrink-0"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-slate-200 truncate">{c.name}</p>
+                        <p className="text-xs text-slate-500 truncate">{c.title}</p>
+                      </div>
+                      {c.linkedinUrl && (
+                        <a
+                          href={c.linkedinUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-slate-500 hover:text-blue-400 transition-colors hidden sm:block flex-shrink-0"
+                        >
+                          LinkedIn ↗
+                        </a>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => enrichOne(c.id, firm.name)}
+                        disabled={isEnriching}
+                        className="flex-shrink-0 gap-1.5"
+                      >
+                        {isEnriching ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <Zap className="w-3 h-3" />
+                        )}
+                        {isEnriching ? "Enriching…" : "Enrich"}
+                      </Button>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

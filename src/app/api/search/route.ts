@@ -5,11 +5,16 @@ import { Candidate } from "@/lib/types";
 import { randomUUID } from "crypto";
 
 export async function POST(req: NextRequest) {
-  const { firmName, firmId, personName } = await req.json();
+  const { firmName, firmId, personName, division } = await req.json();
 
   if (!personName && !firmName) {
     return NextResponse.json({ error: "firmName or personName required" }, { status: 400 });
   }
+
+  // For diversified firms (e.g. Goldman Sachs), use the division name as the search term
+  // so we target "Goldman Sachs Asset Management" PMs, not IBD PMs.
+  // Candidates are still stored under the canonical firmName.
+  const searchTerm = division ?? firmName;
 
   const existingCandidates = await getCandidates();
   const existingUrls = new Set(existingCandidates.map((c) => c.linkedinUrl).filter(Boolean));
@@ -23,10 +28,10 @@ export async function POST(req: NextRequest) {
       ]
     : [
         // Simple queries — no OR operators, Serper 400s on complex boolean syntax
-        `"${firmName}" "product manager" site:linkedin.com/in`,
-        `"${firmName}" "head of product" site:linkedin.com/in`,
-        `"${firmName}" "VP product" site:linkedin.com/in`,
-        `"${firmName}" "senior product manager" site:linkedin.com/in`,
+        `"${searchTerm}" "product manager" site:linkedin.com/in`,
+        `"${searchTerm}" "head of product" site:linkedin.com/in`,
+        `"${searchTerm}" "VP product" site:linkedin.com/in`,
+        `"${searchTerm}" "senior product manager" site:linkedin.com/in`,
       ];
 
   const numResults = personName ? 5 : 10;

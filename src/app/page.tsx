@@ -2,16 +2,16 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Firm, Candidate, FirmSector, SECTOR_LABELS } from "@/lib/types";
-import { vibeScoreBg } from "@/lib/utils";
+import { FirmCard } from "@/components/FirmCard";
 import Link from "next/link";
+import { Building2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Zap, Search, Loader2, Building2, Plus, ChevronRight } from "lucide-react";
 
 const SECTORS = Object.entries(SECTOR_LABELS) as [FirmSector, string][];
 
 type DiscoveryState = { loading: boolean; status: string };
 
-export default function PipelinePage() {
+export default function HomePage() {
   const [firms, setFirms] = useState<Firm[]>([]);
   const [allCandidates, setAllCandidates] = useState<Candidate[]>([]);
   const [sectorFilter, setSectorFilter] = useState<FirmSector | "">("");
@@ -33,20 +33,23 @@ export default function PipelinePage() {
   }, [load]);
 
   async function handleDiscover(firm: Firm) {
-    setDiscoveryStates((prev) => ({ ...prev, [firm.id]: { loading: true, status: "Searching LinkedIn…" } }));
+    setDiscoveryStates((prev) => ({
+      ...prev,
+      [firm.id]: { loading: true, status: "Searching LinkedIn…" },
+    }));
 
     try {
       await fetch("/api/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ firmName: firm.name, firmId: firm.id }),
+        body: JSON.stringify({ firmName: firm.name, firmId: firm.id, division: firm.division }),
       });
 
       const fresh: Candidate[] = await fetch(`/api/candidates?firm=${encodeURIComponent(firm.name)}`).then((r) => r.json());
       setAllCandidates((prev) => [...prev.filter((c) => c.firm !== firm.name), ...fresh]);
 
-      const pending = fresh.filter((c) => c.status === "pending");
-      if (pending.length === 0) {
+      const pendingCount = fresh.filter((c) => c.status === "pending").length;
+      if (pendingCount === 0) {
         setDiscoveryStates((prev) => ({ ...prev, [firm.id]: { loading: false, status: "" } }));
         return;
       }
@@ -81,17 +84,19 @@ export default function PipelinePage() {
     }
   }
 
+  const candidatesByFirm = (firmName: string) => allCandidates.filter((c) => c.firm === firmName);
+
   const visibleFirms = sectorFilter ? firms.filter((f) => f.sector === sectorFilter) : firms;
   const hasSectors = firms.some((f) => f.sector);
   const totalEnriched = allCandidates.filter((c) => c.status === "enriched").length;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-100">Pipeline</h1>
-          <p className="text-sm text-slate-400 mt-0.5">
-            {firms.length} firm{firms.length !== 1 ? "s" : ""} · {allCandidates.length} PMs found · {totalEnriched} enriched
+          <h1 className="text-2xl font-bold text-slate-100">Dashboard</h1>
+          <p className="text-slate-400 text-sm mt-1">
+            {firms.length} firms · {allCandidates.length} PMs found · {totalEnriched} enriched
           </p>
         </div>
         <Link href="/firms" className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-slate-200 transition-colors">
@@ -139,118 +144,21 @@ export default function PipelinePage() {
           </Link>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {visibleFirms.map((firm) => {
-            const firmCandidates = allCandidates.filter((c) => c.firm === firm.name);
-            const enriched = firmCandidates
-              .filter((c) => c.status === "enriched")
-              .sort((a, b) => b.vibeScore - a.vibeScore);
-            const pending = firmCandidates.filter((c) => c.status === "pending");
-            const top3 = enriched.slice(0, 3);
-            const avgScore =
-              enriched.length > 0
-                ? Math.round(enriched.reduce((s, c) => s + c.vibeScore, 0) / enriched.length)
-                : null;
             const ds = discoveryStates[firm.id];
-            const isWorking = ds?.loading ?? false;
-
             return (
-              <div key={firm.id} className="bg-slate-800 border border-slate-700 rounded-xl p-5 hover:border-slate-600 transition-colors">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="font-semibold text-slate-100">{firm.name}</h3>
-                      {firm.sector && (
-                        <span className="text-xs text-indigo-400 bg-indigo-900/40 px-1.5 py-0.5 rounded">
-                          {SECTOR_LABELS[firm.sector]}
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      {firmCandidates.length > 0
-                        ? `${firmCandidates.length} found · ${enriched.length} enriched${avgScore ? ` · avg ${avgScore}/100` : ""}`
-                        : "No candidates yet"}
-                      {pending.length > 0 && (
-                        <span className="text-amber-500 ml-1">· {pending.length} pending</span>
-                      )}
-                    </p>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleDiscover(firm)}
-                    disabled={isWorking}
-                    className="flex-shrink-0 gap-1.5"
-                  >
-                    {isWorking ? (
-                      <Loader2 className="w-3 h-3 animate-spin" />
-                    ) : (
-                      <Search className="w-3 h-3" />
-                    )}
-                    {firmCandidates.length === 0 ? "Discover PMs" : "Search more"}
-                  </Button>
-                </div>
-
-                {ds?.status && (
-                  <p className="text-xs text-indigo-300 mt-2">{ds.status}</p>
-                )}
-
-                {top3.length > 0 && (
-                  <div className="mt-4 space-y-1">
-                    {top3.map((c, i) => (
-                      <Link
-                        key={c.id}
-                        href={`/candidates/${c.id}`}
-                        className="flex items-center gap-3 rounded-lg px-3 py-2 hover:bg-slate-700 transition-colors group"
-                      >
-                        <span className="text-slate-600 text-xs w-4 flex-shrink-0 text-right">{i + 1}</span>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-slate-200 group-hover:text-indigo-300 transition-colors truncate">
-                            {c.name}
-                          </p>
-                          <p className="text-xs text-slate-500 truncate">{c.title}</p>
-                        </div>
-                        <span className={`flex-shrink-0 px-2 py-0.5 rounded-full border text-xs font-bold ${vibeScoreBg(c.vibeScore)}`}>
-                          {c.vibeScore}
-                        </span>
-                      </Link>
-                    ))}
-                  </div>
-                )}
-
-                {top3.length === 0 && pending.length > 0 && !isWorking && (
-                  <p className="text-xs text-slate-600 mt-3 italic">
-                    {pending.length} candidate{pending.length !== 1 ? "s" : ""} pending enrichment
-                  </p>
-                )}
-
-                {top3.length === 0 && pending.length === 0 && firmCandidates.length === 0 && !isWorking && (
-                  <p className="text-xs text-slate-600 mt-3 italic">
-                    Click Discover to find PMs at {firm.name}
-                  </p>
-                )}
-
-                {firmCandidates.length > 0 && (
-                  <div className="mt-3 pt-3 border-t border-slate-700/50">
-                    <Link
-                      href={`/firms/${firm.id}`}
-                      className="flex items-center gap-1 text-xs text-slate-500 hover:text-indigo-300 transition-colors"
-                    >
-                      View all {firmCandidates.length} PM{firmCandidates.length !== 1 ? "s" : ""}
-                      <ChevronRight className="w-3 h-3" />
-                    </Link>
-                  </div>
-                )}
-              </div>
+              <FirmCard
+                key={firm.id}
+                firm={firm}
+                candidates={candidatesByFirm(firm.name)}
+                onDiscover={() => handleDiscover(firm)}
+                discovering={ds?.loading ?? false}
+                discoveryStatus={ds?.status ?? ""}
+              />
             );
           })}
         </div>
-      )}
-
-      {allCandidates.length === 0 && firms.length > 0 && (
-        <p className="text-center text-sm text-slate-500">
-          Click <span className="text-slate-300">Discover PMs</span> on any firm above to get started.
-        </p>
       )}
     </div>
   );

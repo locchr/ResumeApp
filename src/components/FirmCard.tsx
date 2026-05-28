@@ -3,16 +3,19 @@
 import { Firm, Candidate, SECTOR_LABELS } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Building2, Search, Trash2, Users, List } from "lucide-react";
+import { Building2, Search, Trash2, Users, List, Loader2 } from "lucide-react";
 import Link from "next/link";
 
 interface Props {
   firm: Firm;
   candidates: Candidate[];
+  onDiscover?: () => void;
+  discovering?: boolean;
+  discoveryStatus?: string;
   onDelete?: (id: string) => void;
 }
 
-export function FirmCard({ firm, candidates, onDelete }: Props) {
+export function FirmCard({ firm, candidates, onDiscover, discovering, discoveryStatus, onDelete }: Props) {
   const enriched = candidates.filter((c) => c.status === "enriched");
   const avgScore =
     enriched.length > 0
@@ -45,12 +48,22 @@ export function FirmCard({ firm, candidates, onDelete }: Props) {
           </div>
 
           <div className="flex items-center gap-1.5 flex-shrink-0">
-            <Link href={`/search?firm=${encodeURIComponent(firm.id)}`}>
-              <Button size="sm" variant="outline" className="gap-1.5">
-                <Search className="w-3 h-3" />
-                Search
+            {onDiscover && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={onDiscover}
+                disabled={discovering}
+                className="gap-1.5"
+              >
+                {discovering ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  <Search className="w-3 h-3" />
+                )}
+                {candidates.length === 0 ? "Discover" : "More"}
               </Button>
-            </Link>
+            )}
             {onDelete && (
               <Button size="icon" variant="ghost" onClick={() => onDelete(firm.id)}
                 className="text-slate-600 hover:text-red-400 w-8 h-8">
@@ -59,6 +72,10 @@ export function FirmCard({ firm, candidates, onDelete }: Props) {
             )}
           </div>
         </div>
+
+        {discoveryStatus && (
+          <p className="text-xs text-indigo-300 mt-2">{discoveryStatus}</p>
+        )}
 
         {candidates.length > 0 && (
           <div className="mt-4 pt-3 border-t border-slate-700">
