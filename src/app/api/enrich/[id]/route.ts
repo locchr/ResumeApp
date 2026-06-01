@@ -124,6 +124,8 @@ export async function POST(
       signals: webSignals,
       evidence,
       assessment,
+      previousScore: candidate.status === "enriched" ? candidate.vibeScore : candidate.previousScore,
+      previousEnrichedAt: candidate.status === "enriched" ? candidate.enrichedAt : candidate.previousEnrichedAt,
       enrichedAt: new Date().toISOString(),
       status: "enriched" as const,
     };

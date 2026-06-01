@@ -1,13 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Candidate } from "@/lib/types";
 import { vibeScoreBg, vibeScoreLabel } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScoreBreakdown } from "@/components/ScoreBreakdown";
-import { Loader2, Zap } from "lucide-react";
+import { Loader2, Star, Zap } from "lucide-react";
 import { GitHubIcon, LinkedInIcon } from "@/components/icons";
 import Link from "next/link";
 
@@ -15,12 +15,16 @@ interface Props {
   candidate: Candidate;
   onEnrich?: (id: string) => void;
   enriching?: boolean;
+  onFavoriteToggle?: (id: string, favorited: boolean) => void;
 }
 
-export function CandidateCard({ candidate, onEnrich, enriching }: Props) {
+export function CandidateCard({ candidate, onEnrich, enriching, onFavoriteToggle }: Props) {
   const [expanded, setExpanded] = useState(false);
+  const [isFavorited, setIsFavorited] = useState(candidate.favorited ?? false);
   const isEnriched = candidate.status === "enriched";
   const isPending = candidate.status === "pending";
+
+  useEffect(() => { setIsFavorited(candidate.favorited ?? false); }, [candidate.favorited]);
 
   const initials = candidate.name
     .split(" ")
@@ -28,6 +32,23 @@ export function CandidateCard({ candidate, onEnrich, enriching }: Props) {
     .join("")
     .slice(0, 2)
     .toUpperCase();
+
+  const delta =
+    isEnriched && candidate.previousScore !== undefined
+      ? candidate.vibeScore - candidate.previousScore
+      : 0;
+
+  async function handleFavorite(e: React.MouseEvent) {
+    e.preventDefault();
+    const newVal = !isFavorited;
+    setIsFavorited(newVal);
+    await fetch("/api/candidates", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: candidate.id, favorited: newVal }),
+    });
+    onFavoriteToggle?.(candidate.id, newVal);
+  }
 
   return (
     <Card className="hover:border-slate-600 transition-colors">
@@ -54,15 +75,31 @@ export function CandidateCard({ candidate, onEnrich, enriching }: Props) {
                 <p className="text-xs text-slate-500">{candidate.firm}</p>
               </div>
 
-              {/* Score badge */}
-              {isEnriched && (
-                <div className={`flex-shrink-0 px-2.5 py-1 rounded-full border text-xs font-bold ${vibeScoreBg(candidate.vibeScore)}`}>
-                  {candidate.vibeScore}
-                </div>
-              )}
-              {isPending && (
-                <Badge variant="muted" className="flex-shrink-0">Pending</Badge>
-              )}
+              {/* Score badge + delta + star */}
+              <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                {isEnriched && (
+                  <div className="flex items-center gap-1.5">
+                    {delta !== 0 && (
+                      <span className={`text-xs font-semibold ${delta > 0 ? "text-green-400" : "text-red-400"}`}>
+                        {delta > 0 ? "+" : ""}{delta}
+                      </span>
+                    )}
+                    <div className={`px-2.5 py-1 rounded-full border text-xs font-bold ${vibeScoreBg(candidate.vibeScore)}`}>
+                      {candidate.vibeScore}
+                    </div>
+                  </div>
+                )}
+                {isPending && (
+                  <Badge variant="muted" className="flex-shrink-0">Pending</Badge>
+                )}
+                <button
+                  onClick={handleFavorite}
+                  className="text-slate-500 hover:text-amber-400 transition-colors"
+                  title={isFavorited ? "Remove from favorites" : "Add to favorites"}
+                >
+                  <Star className={`w-3.5 h-3.5 ${isFavorited ? "fill-amber-400 text-amber-400" : ""}`} />
+                </button>
+              </div>
             </div>
 
             {/* Assessment */}

@@ -51,6 +51,9 @@ export interface Candidate {
   assessment: string;
   githubStats?: GitHubStats;
   outreachStatus?: "none" | "reached_out" | "responded" | "not_interested";
+  favorited?: boolean;
+  previousScore?: number;
+  previousEnrichedAt?: string;
   enrichedAt?: string;
   status: 'pending' | 'enriched' | 'error';
   errorMessage?: string;

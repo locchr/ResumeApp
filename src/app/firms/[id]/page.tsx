@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import { Firm, Candidate, SECTOR_LABELS } from "@/lib/types";
 import { vibeScoreBg } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Search, Zap, Loader2, SlidersHorizontal } from "lucide-react";
+import { ArrowLeft, Search, Zap, Loader2, SlidersHorizontal, Star } from "lucide-react";
 import Link from "next/link";
 
 export default function FirmDetailPage() {
@@ -122,6 +122,15 @@ export default function FirmDetailPage() {
     setPendingSelectedIds(allSelected ? new Set() : new Set(pending.map((c) => c.id)));
   }
 
+  async function toggleFavorite(cid: string, favorited: boolean) {
+    setCandidates((prev) => prev.map((c) => c.id === cid ? { ...c, favorited } : c));
+    await fetch("/api/candidates", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: cid, favorited }),
+    });
+  }
+
   if (!firm) {
     return <div className="text-center py-16 text-slate-400 text-sm">Loading…</div>;
   }
@@ -223,6 +232,7 @@ export default function FirmDetailPage() {
               <div className="space-y-1.5">
                 {enriched.map((c, i) => {
                   const isSelected = enrichedSelectedIds.has(c.id);
+                  const delta = c.previousScore !== undefined ? c.vibeScore - c.previousScore : 0;
                   return (
                     <div
                       key={c.id}
@@ -243,12 +253,24 @@ export default function FirmDetailPage() {
                         <p className="font-medium text-slate-100 hover:text-indigo-300 transition-colors truncate">{c.name}</p>
                         <p className="text-xs text-slate-500 truncate">{c.title}</p>
                       </Link>
+                      {delta !== 0 && (
+                        <span className={`flex-shrink-0 text-xs font-semibold ${delta > 0 ? "text-green-400" : "text-red-400"}`}>
+                          {delta > 0 ? "+" : ""}{delta}
+                        </span>
+                      )}
                       <span className={`flex-shrink-0 px-2.5 py-1 rounded-full border text-xs font-bold ${vibeScoreBg(c.vibeScore)}`}>
                         <span className="flex items-center gap-1">
                           <Zap className="w-3 h-3" />
                           {c.vibeScore}
                         </span>
                       </span>
+                      <button
+                        onClick={() => toggleFavorite(c.id, !c.favorited)}
+                        className={`flex-shrink-0 p-1 transition-colors ${c.favorited ? "text-amber-400" : "text-slate-500 hover:text-amber-400"}`}
+                        title={c.favorited ? "Remove from favorites" : "Add to favorites"}
+                      >
+                        <Star className={`w-4 h-4 ${c.favorited ? "fill-amber-400" : ""}`} />
+                      </button>
                     </div>
                   );
                 })}
